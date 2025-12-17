@@ -5,6 +5,8 @@ import LandingPage from './pages/LandingPage';
 import Authentication from './pages/authentication';
 import { AuthProvider } from './contexts/AuthContext';
 import VideoMeet from './pages/VideoMeet';
+import Dashboard from './pages/Dashboard';
+import RequireAuth from './utils/RequireAuth';
 import { Buffer } from 'buffer';
 
 // Polyfill Buffer for engine.io
@@ -18,6 +20,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Authentication />} />
+            <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/:url" element={<VideoMeet />} />
           </Routes>
         </AuthProvider>

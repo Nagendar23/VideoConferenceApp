@@ -9,6 +9,7 @@ export const client = axios.create({
 });
 
 export const AuthProvider = ({ children }) => {
+  const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
 
   const handleRegister = async (name, username, password) => {
@@ -36,20 +37,20 @@ export const AuthProvider = ({ children }) => {
       console.log(request.data)
       if (request.status === 200) {
         localStorage.setItem("token", request.data.token);
-        // return('/home')
+        navigate("/dashboard");
       }
     } catch (err) {
       throw err;
     }
   };
 
-  const navigate = useNavigate();
+
 
   const data = {
     userData,
     setUserData,
     handleRegister,
-    handleLogin, 
+    handleLogin,
   };
 
   return <AuthContext.Provider value={data}>{children}</AuthContext.Provider>;

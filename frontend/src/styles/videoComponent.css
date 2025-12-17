@@ -1,43 +1,125 @@
-.meetVideoContainer{
-    position:relative;
-    height:100vh;
-    background:black;
-
-}
-.meetUserVideo{
-    position: absolute;
-    bottom:10vh;
-    height: 20vh;
-    width:auto;
-    right:0;
-    border-radius:20px;
-
-
+.meetVideoContainer {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  background-color: #121212;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.buttonContainers{
-    position: absolute;
-    width:100vw;
-    bottom:0;
-    text-align:center;
-
+/* Floating Local Video */
+.meetUserVideo {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 250px;
+  height: 150px;
+  /* Enforce height to match approx ratio */
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  object-fit: cover;
+  z-index: 10;
+  transition: all 0.3s ease;
+  background: black;
+  /* ensure background is black even if video loads slowly */
 }
 
-.buttonContainers svg{
-    font-size :3rem;
-
-}
-.conferenceView{
-    display:flex;
-    padding: 10px;
-    gap:10px;
-
+.meetUserVideo:hover {
+  transform: scale(1.05);
 }
 
-.conferenceView video{
-    width:40vw;
-    height:40vw;
-    min-width: 30vw;
-    border-radius:10px;
+/* Remote Videos Container (Grid) */
+.conferenceView {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  gap: 20px;
+}
 
+/* Individual Remote Video Wrapper */
+.video-wrapper {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1e1e1e;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  /* Default to taking up space, dynamic sizing handled by JS/Flex */
+  flex: 1 1 45%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16/9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.video-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Single remote user takes full space */
+.conferenceView.single-user .video-wrapper {
+  flex: 1 1 100%;
+  height: 100%;
+  max-width: 100%;
+}
+
+/* Avatar Fallback */
+.avatar-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: #2c2c2c;
+  color: white;
+}
+
+/* Controls Bar */
+.buttonContainers {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  z-index: 20;
+}
+
+.buttonContainers button {
+  transition: all 0.2s ease;
+}
+
+.buttonContainers button:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+h4 {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  margin: 0;
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  pointer-events: none;
 }

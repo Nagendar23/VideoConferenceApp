@@ -28,8 +28,59 @@ io.on('connection', (socket) => {
     socket.emit('reply', `Server got your message: ${data}`);
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on("join-call", (path) => {
+    if (io.sockets.adapter.rooms.get(path) === undefined) {
+      socket.join(path);
+      io.to(path).emit("user-joined", socket.id, []);
+    } else {
+      let clients = [...io.sockets.adapter.rooms.get(path)];
+      socket.join(path);
+      io.to(socket.id).emit("user-joined", socket.id, clients);
+    }
+  });
+
+  socket.on("signal", (toId, message) => {
+    io.to(toId).emit("signal", socket.id, message);
+  });
+
+  socket.on("chat-message", (data, sender) => {
+    const match = data.match(/^@(\S+)\s+(.+)$/);
+    if (match) {
+      const targetUsername = match[1];
+      const msg = match[2];
+      const targetSocketId = Object.keys(io.sockets.sockets).find(
+        id => io.sockets.sockets[id].username === targetUsername
+      );
+      if (targetSocketId) {
+        io.to(targetSocketId).emit("chat-message", msg, sender);
+      }
+    } else {
+      socket.broadcast.emit("chat-message", data, sender);
+    }
+  });
+
+  socket.on("video-toggle", (isAvailable) => {
+    // Broadcast this user's video state to everyone else in the rooms they are in
+    // Since this is a simple broadcasting, we can just broadcast to "room" but we don't track rooms explicitly in 'socket' object without looking them up or passing it.
+    // However, socket.rooms contains the rooms.
+    const rooms = [...socket.rooms];
+    rooms.forEach((room) => {
+      socket.to(room).emit("video-toggle", socket.id, isAvailable);
+    });
+  });
+
+  socket.on("disconnect", () => {
+    // find which room the user was in??
+    // socket.io automatically leaves rooms on disconnect.
+    // However, we might want to notify others in those rooms.
+    // 'disconnecting' event gives access to socket.rooms BEFORE they are left.
+  });
+
+  socket.on("disconnecting", () => {
+    const rooms = [...socket.rooms];
+    rooms.forEach((room) => {
+      socket.to(room).emit("user-left", socket.id)
+    })
   });
 });
 

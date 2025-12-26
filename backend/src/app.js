@@ -28,6 +28,8 @@ io.on('connection', (socket) => {
     socket.emit('reply', `Server got your message: ${data}`);
   });
 
+  let activeScreenSharerId = null;
+
   socket.on("join-call", (path) => {
     if (io.sockets.adapter.rooms.get(path) === undefined) {
       socket.join(path);
@@ -36,6 +38,11 @@ io.on('connection', (socket) => {
       let clients = [...io.sockets.adapter.rooms.get(path)];
       socket.join(path);
       io.to(socket.id).emit("user-joined", socket.id, clients);
+
+      // key change: tell the new user if someone is sharing
+      if (activeScreenSharerId) {
+        io.to(socket.id).emit("screen-share-started", activeScreenSharerId);
+      }
     }
   });
 
@@ -61,12 +68,33 @@ io.on('connection', (socket) => {
 
   socket.on("video-toggle", (isAvailable) => {
     // Broadcast this user's video state to everyone else in the rooms they are in
-    // Since this is a simple broadcasting, we can just broadcast to "room" but we don't track rooms explicitly in 'socket' object without looking them up or passing it.
-    // However, socket.rooms contains the rooms.
     const rooms = [...socket.rooms];
     rooms.forEach((room) => {
       socket.to(room).emit("video-toggle", socket.id, isAvailable);
     });
+  });
+
+  socket.on("request-screen-share", () => {
+    if (activeScreenSharerId === null || activeScreenSharerId === socket.id) {
+      activeScreenSharerId = socket.id;
+      // Broadcast to everyone including sender (for confirmation)
+      const rooms = [...socket.rooms];
+      rooms.forEach((room) => {
+        io.in(room).emit("screen-share-started", socket.id);
+      });
+    } else {
+      socket.emit("screen-share-denied");
+    }
+  });
+
+  socket.on("stop-screen-share", () => {
+    if (activeScreenSharerId === socket.id) {
+      activeScreenSharerId = null;
+      const rooms = [...socket.rooms];
+      rooms.forEach((room) => {
+        io.in(room).emit("screen-share-stopped");
+      });
+    }
   });
 
   socket.on("disconnect", () => {
@@ -74,12 +102,24 @@ io.on('connection', (socket) => {
     // socket.io automatically leaves rooms on disconnect.
     // However, we might want to notify others in those rooms.
     // 'disconnecting' event gives access to socket.rooms BEFORE they are left.
+    if (activeScreenSharerId === socket.id) {
+      activeScreenSharerId = null;
+      // Broadcast stop to everyone even if not cleaner way to find specific room here without iterating 
+      // For simplicity in this app structure where we might be broadcasting globally or relying on disconnecting event
+      // But since we are inside disconnect, rooms are gone.
+      // We rely on 'disconnecting' for room broadcasts usually.
+      // But we must clear the global variable.
+    }
   });
 
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
     rooms.forEach((room) => {
       socket.to(room).emit("user-left", socket.id)
+
+      if (activeScreenSharerId === socket.id) {
+        socket.to(room).emit("screen-share-stopped");
+      }
     })
   });
 });

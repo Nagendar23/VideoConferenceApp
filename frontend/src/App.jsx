@@ -1,8 +1,8 @@
 import React from 'react';
-import './App.css';
+
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
-import Authentication from './pages/authentication';
+import Authentication from './pages/Authentication';
 import { AuthProvider } from './contexts/AuthContext';
 import VideoMeet from './pages/VideoMeet';
 import Dashboard from './pages/Dashboard';
@@ -14,7 +14,7 @@ window.Buffer = Buffer;
 
 function App() {
   return (
-    <div className="App">
+    <div>
       <Router>
         <AuthProvider>
           <Routes>

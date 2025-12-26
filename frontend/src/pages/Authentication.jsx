@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -18,9 +19,10 @@ import { Snackbar } from '@mui/material';
 const defaultTheme = createTheme();
 
 export default function Authentication() {
-  const [username, setUsername] = React.useState();
-  const [password, setPassword] = React.useState();
-  const [name, setName] = React.useState();
+  const [username, setUsername] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
   const [error, setError] = React.useState();
   const [message, setMessage] = React.useState();
   const [formState, setFormState] = React.useState(0);
@@ -31,10 +33,12 @@ export default function Authentication() {
   let handleAuth = async () => {
     try {
       if (formState === 0) {
-        let result = await handleLogin(username, password);
+        let result = await handleLogin(email, password);
+        console.log(result);
+        navigate("/dashboard");
       }
       if (formState === 1) {
-        let result = await handleRegister(name, username, password);
+        let result = await handleRegister(name, email, username, password);
         console.log(result);
         setUsername("");
         setMessage(result);
@@ -42,10 +46,11 @@ export default function Authentication() {
         setError("");
         setFormState(0);
         setPassword("");
+        setEmail("");
       }
     } catch (err) {
       console.log(err);
-      let message = err.response.data.message;
+      let message = err.response?.data?.message || "An error occurred";
       setError(message);
     }
   };
@@ -57,18 +62,18 @@ export default function Authentication() {
 
         {/* Background image section */}
         <Grid item xs={false} sm={4} md={7} sx={{ position: 'relative' }}>
-<Box
-  component="img"
-  src="/images/signin.png"
-  alt="Sign In"
-  sx={{
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  }}
-/>
+          <Box
+            component="img"
+            src="/images/signin.png"
+            alt="Sign In"
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
         </Grid>
 
         {/* Form section */}
@@ -107,9 +112,9 @@ export default function Authentication() {
                   margin="normal"
                   required
                   fullWidth
-                  id="username"
+                  id="name"
                   label="Full Name"
-                  name="username"
+                  name="name"
                   value={name}
                   autoFocus
                   onChange={(e) => setName(e.target.value)}
@@ -120,13 +125,26 @@ export default function Authentication() {
                 margin="normal"
                 required
                 fullWidth
-                id="username"
-                label="Username"
-                name="username"
-                value={username}
+                id="email"
+                label="Email Address"
+                name="email"
+                value={email}
                 autoFocus
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
               />
+
+              {formState === 1 ? (
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  id="username"
+                  label="Username"
+                  name="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              ) : null}
 
               <TextField
                 margin="normal"
@@ -140,7 +158,7 @@ export default function Authentication() {
                 id="password"
               />
 
-              <p style={{ color: "red" }}>{error}</p>
+              <p className="text-red-500">{error}</p>
 
               <Button
                 type="button"

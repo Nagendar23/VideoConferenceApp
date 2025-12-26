@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { createContext, useState } from "react";
+import { createContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 export const AuthContext = createContext();
@@ -12,10 +12,11 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
 
-  const handleRegister = async (name, username, password) => {
+  const handleRegister = async (name, email, username, password) => {
     try {
       let request = await client.post("/register", {
         name: name,
+        email: email,
         username: username,
         password: password,
       });
@@ -28,22 +29,78 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const handleLogin = async (username, password) => {
+  const handleLogin = async (email, password) => {
     try {
       let request = await client.post("/login", {
-        username: username,
+        email: email,
         password: password,
       });
       console.log(request.data)
       if (request.status === 200) {
         localStorage.setItem("token", request.data.token);
-        navigate("/dashboard");
+        // Try to fetch user data, but don't fail login if it fails
+        try {
+          const userData = await getHistoryOfUser();
+          setUserData(userData);
+        } catch (error) {
+          console.error("Failed to fetch user profile after login:", error);
+        }
+        return request.data;
       }
     } catch (err) {
       throw err;
     }
   };
 
+  const getHistoryOfUser = async () => {
+    try {
+      let request = await client.get("/get_all_activity", {
+        params: {
+          token: localStorage.getItem("token")
+        }
+      });
+      return request.data
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  const addToUserHistory = async (meetingCode) => {
+    try {
+      let request = await client.post("/add_to_activity", {
+        token: localStorage.getItem("token"),
+        meeting_code: meetingCode
+      });
+      return request
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setUserData(null);
+    navigate("/auth");
+  }
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        try {
+          const history = await getHistoryOfUser();
+          setUserData(history); // Or fetching user profile
+          navigate("/dashboard");
+        } catch (e) {
+          console.log("Check session error", e);
+          // Token invalid or other error
+          localStorage.removeItem("token");
+          navigate("/auth");
+        }
+      }
+    }
+    checkSession();
+  }, [])
 
 
   const data = {
@@ -51,6 +108,9 @@ export const AuthProvider = ({ children }) => {
     setUserData,
     handleRegister,
     handleLogin,
+    getHistoryOfUser,
+    addToUserHistory,
+    handleLogout
   };
 
   return <AuthContext.Provider value={data}>{children}</AuthContext.Provider>;

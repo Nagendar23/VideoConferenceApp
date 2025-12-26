@@ -19,6 +19,12 @@ const io = new Server(server, {
   },
 });
 
+// global state
+let activeScreenSharerId = null;
+const userMap = {};
+const roomHosts = {}; // path -> socketId
+const waitingUsers = {}; // path -> [{ socketId, username }]
+
 // handle socket.io events
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -28,21 +34,95 @@ io.on('connection', (socket) => {
     socket.emit('reply', `Server got your message: ${data}`);
   });
 
-  let activeScreenSharerId = null;
+  socket.on("join-request", (path, username) => {
+    userMap[socket.id] = username || "Guest";
 
-  socket.on("join-call", (path) => {
-    if (io.sockets.adapter.rooms.get(path) === undefined) {
+    // Check if room has a host
+    if (!roomHosts[path]) {
+      // No host -> New Room -> This user is Host
+      roomHosts[path] = socket.id;
+
       socket.join(path);
-      io.to(path).emit("user-joined", socket.id, []);
+      // Emit room-joined to self (as Host)
+      socket.emit("room-joined", { isHost: true, username: userMap[socket.id] });
+
+      // Also emit user-joined (to self mainly to init list, though empty)
+      io.to(socket.id).emit("user-joined", socket.id, [], userMap[socket.id]);
+
     } else {
-      let clients = [...io.sockets.adapter.rooms.get(path)];
-      socket.join(path);
-      io.to(socket.id).emit("user-joined", socket.id, clients);
+      // Room exists -> Join Waiting Room
+      if (!waitingUsers[path]) waitingUsers[path] = [];
+      waitingUsers[path].push({ socketId: socket.id, username: userMap[socket.id] });
 
-      // key change: tell the new user if someone is sharing
+      // Notify Host
+      const hostSocketId = roomHosts[path];
+      io.to(hostSocketId).emit("user-requested-join", { socketId: socket.id, username: userMap[socket.id] });
+
+      // Tell user to wait
+      socket.emit("wait-for-host");
+    }
+  });
+
+  socket.on("admit-user", ({ socketId, path }) => {
+    // Only host can admit
+    if (roomHosts[path] !== socket.id) return;
+
+    // Find user in waiting list
+    if (waitingUsers[path]) {
+      waitingUsers[path] = waitingUsers[path].filter(u => u.socketId !== socketId);
+    }
+
+    const targetSocket = io.sockets.sockets.get(socketId);
+    if (targetSocket) {
+      targetSocket.join(path);
+
+      // Emit room-joined to accepted user
+      targetSocket.emit("room-joined", { isHost: false, username: userMap[socketId] });
+
+      // Standard join flow logic
+      let clients = [...io.sockets.adapter.rooms.get(path)];
+      const existingUsers = clients.map(clientId => ({
+        socketId: clientId,
+        username: userMap[clientId] || "Guest"
+      }));
+
+      // Notify accepted user about existing users
+      io.to(socketId).emit("user-joined", socketId, existingUsers, userMap[socketId]);
+
+      // Notify others about new user
+      socket.broadcast.to(path).emit("user-joined", socketId, [], userMap[socketId]);
+
+      // If screen share active, tell new user
       if (activeScreenSharerId) {
-        io.to(socket.id).emit("screen-share-started", activeScreenSharerId);
+        io.to(socketId).emit("screen-share-started", activeScreenSharerId);
       }
+    }
+  });
+
+  socket.on("reject-user", ({ socketId, path }) => {
+    if (roomHosts[path] !== socket.id) return;
+
+    if (waitingUsers[path]) {
+      waitingUsers[path] = waitingUsers[path].filter(u => u.socketId !== socketId);
+    }
+
+    io.to(socketId).emit("join-rejected");
+  });
+
+  socket.on("kick-user", (targetSocketId) => {
+    // We assume socket is host. Ideally pass path to verify.
+    // Getting path from rooms:
+    const rooms = [...socket.rooms];
+    // Find the room where this user is host
+    const managedRoom = rooms.find(r => roomHosts[r] === socket.id);
+
+    if (managedRoom) {
+      io.to(targetSocketId).emit("kicked");
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.leave(managedRoom);
+      }
+      io.to(managedRoom).emit("user-left", targetSocketId);
     }
   });
 
@@ -98,29 +178,57 @@ io.on('connection', (socket) => {
   });
 
   socket.on("disconnect", () => {
-    // find which room the user was in??
-    // socket.io automatically leaves rooms on disconnect.
-    // However, we might want to notify others in those rooms.
-    // 'disconnecting' event gives access to socket.rooms BEFORE they are left.
     if (activeScreenSharerId === socket.id) {
       activeScreenSharerId = null;
-      // Broadcast stop to everyone even if not cleaner way to find specific room here without iterating 
-      // For simplicity in this app structure where we might be broadcasting globally or relying on disconnecting event
-      // But since we are inside disconnect, rooms are gone.
-      // We rely on 'disconnecting' for room broadcasts usually.
-      // But we must clear the global variable.
     }
   });
 
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
     rooms.forEach((room) => {
-      socket.to(room).emit("user-left", socket.id)
+      socket.to(room).emit("user-left", socket.id);
 
       if (activeScreenSharerId === socket.id) {
         socket.to(room).emit("screen-share-stopped");
       }
-    })
+
+      // Host Migration / Cleanup
+      if (roomHosts[room] === socket.id) {
+        // Host left
+        // Reassign to next client?
+        const clients = io.sockets.adapter.rooms.get(room);
+        if (clients && clients.size > 1) { // > 1 because current socket still in list?
+          // Actually disconnecting happens before leave in some versions, but clients iterator includes self?
+          // 'clients' is a Set.
+          // We need to pick someone else.
+          let newHostId = null;
+          for (const clientId of clients) {
+            if (clientId !== socket.id) {
+              newHostId = clientId;
+              break;
+            }
+          }
+
+          if (newHostId) {
+            roomHosts[room] = newHostId;
+            // Notify new host? (Optional feature)
+            // For now just keep room open.
+          } else {
+            delete roomHosts[room];
+          }
+        } else {
+          delete roomHosts[room];
+          delete waitingUsers[room];
+        }
+      }
+
+      // Remove from waiting list if they were waiting
+      if (waitingUsers[room]) {
+        waitingUsers[room] = waitingUsers[room].filter(u => u.socketId !== socket.id);
+      }
+    });
+    // Remove user from map
+    delete userMap[socket.id];
   });
 });
 

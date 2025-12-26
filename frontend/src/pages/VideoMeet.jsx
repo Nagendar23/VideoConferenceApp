@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useContext } from "react";
 import Avatar from '@mui/material/Avatar';
 import { deepOrange, deepPurple } from '@mui/material/colors';
 import TextField from "@mui/material/TextField";
@@ -13,7 +13,12 @@ import { Badge } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
+import RemoveCircleIcon from "@mui/icons-material/RemoveCircle"; // For kick
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import { io } from "socket.io-client";
+import { Snackbar, Alert, Chip } from "@mui/material";
+import { AuthContext } from '../contexts/AuthContext';
 
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -43,6 +48,7 @@ const stringToColor = (string) => {
 };
 
 const VideoMeet = () => {
+  const { userData } = useContext(AuthContext); // Access logged in user
   const [socket, setSocket] = useState(null);
   const socketIdRef = useRef();
   const localVideoRef = useRef();
@@ -58,6 +64,12 @@ const VideoMeet = () => {
   const [streamReady, setStreamReady] = useState(false);
   const [screenSharerId, setScreenSharerId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [notification, setNotification] = useState({ open: false, message: "", type: "info", action: null }); // Added type/action
+
+  // Host / Admission State
+  const [isHost, setIsHost] = useState(false);
+  const [joinStatus, setJoinStatus] = useState("idle"); // idle, waiting, joined, rejected
+  const [waitingUsers, setWaitingUsers] = useState([]);
 
   // connect socket
   useEffect(() => {
@@ -132,7 +144,7 @@ const VideoMeet = () => {
           ? prev.map((v) =>
             v.socketId === neighborId ? { ...v, stream: remoteStream } : v
           )
-          : [...prev, { socketId: neighborId, stream: remoteStream, videoEnabled: true }];
+          : [...prev, { socketId: neighborId, stream: remoteStream, videoEnabled: true, username: "Guest" }];
       });
     };
 
@@ -196,22 +208,92 @@ const VideoMeet = () => {
     socket.on("signal", gotMessageFromServer);
 
     // ✅ FIX: loop through all clients instead of only id
-    socket.on("user-joined", async (id, clients) => {
-      console.log("user-joined:", id, "clients:", clients);
+    socket.on("user-joined", async (id, clients, username) => {
+      console.log("user-joined:", id, "clients:", clients, "username:", username);
 
-      clients.forEach(async (clientId) => {
-        if (clientId === socketIdRef.current) return;
-        if (connections[clientId]) return;
+      // If it's ME joining, 'clients' is the list of existing users
+      if (id === socketIdRef.current) {
+        clients.forEach((client) => {
+          // client is { socketId, username }
+          const clientId = client.socketId;
+          const clientName = client.username;
 
-        addConnection(clientId, null, async (pc) => {
+          // Check self
+          if (clientId === socketIdRef.current) return;
+          // Check connection existence
+          if (connections[clientId]) return;
+
+          // Connect
+          addConnection(clientId, null, async (pc) => {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit("signal", clientId, JSON.stringify({ sdp: pc.localDescription }));
+          });
+
+          // Update videos state with username (even without stream yet so placeholder works)
+          setVideos(prev => {
+            const exists = prev.find(v => v.socketId === clientId);
+            if (exists) return prev.map(v => v.socketId === clientId ? { ...v, username: clientName } : v);
+            return [...prev, { socketId: clientId, stream: null, videoEnabled: false, username: clientName }];
+          });
+        });
+      } else {
+        // Someone else joined
+        setNotification({ open: true, message: `${username || "User"} joined the meet`, type: "info" });
+
+        // Connect to them
+        addConnection(id, null, async (pc) => {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket.emit(
             "signal",
-            clientId,
+            id,
             JSON.stringify({ sdp: pc.localDescription })
           );
         });
+
+        // Update their name in video state
+        setVideos(prev => {
+          const exists = prev.find(v => v.socketId === id);
+          if (exists) return prev.map(v => v.socketId === id ? { ...v, username: username } : v);
+          return [...prev, { socketId: id, stream: null, videoEnabled: false, username: username }];
+        });
+      }
+    });
+
+    // NEW HANDLERS
+    socket.on("room-joined", ({ isHost, username }) => {
+      setJoinStatus("joined");
+      setIsHost(isHost);
+      setAskForUsername(false);
+      setNotification({ open: true, message: `Joined as ${isHost ? 'Host' : 'Guest'}`, type: "success" });
+    });
+
+    socket.on("wait-for-host", () => {
+      setJoinStatus("waiting");
+      setAskForUsername(false);
+    });
+
+    socket.on("join-rejected", () => {
+      setJoinStatus("rejected");
+      alert("The host has rejected your request to join.");
+      window.location.reload();
+    });
+
+    socket.on("kicked", () => {
+      alert("You have been removed from the meeting.");
+      window.location.reload();
+    });
+
+    socket.on("user-requested-join", (user) => {
+      // user = { socketId, username }
+      setWaitingUsers(prev => [...prev, user]);
+      // Show notification with actions
+      setNotification({
+        open: true,
+        message: `${user.username || "User"} wants to join`,
+        type: "warning", // distinct color
+        action: user // pass user obj to use in action button
       });
     });
 
@@ -238,13 +320,18 @@ const VideoMeet = () => {
 
   useEffect(() => {
     if (socket && askForUsername && streamReady) {
-      const savedUsername = window.localStorage.getItem("video_call_username");
-      if (savedUsername) {
-        setUsername(savedUsername);
-        // Do not auto-join, just pre-fill
+      if (userData && (userData.username || userData.name)) {
+        setUsername(userData.username || userData.name);
+        // We could auto-request to join if we trust the user is authenticated?
+        // defaults to manual join click for now to let them check audio/video.
+      } else {
+        const savedUsername = window.localStorage.getItem("video_call_username");
+        if (savedUsername) {
+          setUsername(savedUsername);
+        }
       }
     }
-  }, [socket, askForUsername, streamReady]);
+  }, [socket, askForUsername, streamReady, userData]);
 
   // Handle Video Toggle Listener in a separate effect or inside the existing one,
   // but we need 'setVideos' dependency.
@@ -282,14 +369,39 @@ const VideoMeet = () => {
       socket.off("video-toggle");
       socket.off("screen-share-started");
       socket.off("screen-share-stopped");
-      socket.off("screen-share-denied");
-    }
-  }, [socket])
+      socket.off("room-joined");
+      socket.off("wait-for-host");
+      socket.off("join-rejected");
+      socket.off("kicked");
+      socket.off("user-requested-join");
+    };
+  }, [socket]);
 
   const connect = () => {
-    setAskForUsername(false);
+    // setAskForUsername(false); // don't hide yet, wait for response
     window.localStorage.setItem("video_call_username", username);
-    socket.emit("join-call", window.location.href, username);
+    socket.emit("join-request", window.location.href, username);
+  };
+
+  const admitUser = (user) => {
+    socket.emit("admit-user", { socketId: user.socketId, path: window.location.href });
+    setWaitingUsers(prev => prev.filter(u => u.socketId !== user.socketId));
+    setNotification({ ...notification, open: false });
+  };
+
+  const rejectUser = (user) => {
+    socket.emit("reject-user", { socketId: user.socketId, path: window.location.href });
+    setWaitingUsers(prev => prev.filter(u => u.socketId !== user.socketId));
+    setNotification({ ...notification, open: false });
+  };
+
+  const kickUser = (socketId) => {
+    if (!window.confirm("Are you sure you want to kick this user?")) return;
+    socket.emit("kick-user", socketId);
+  };
+
+  const handleCloseNotification = () => {
+    setNotification({ ...notification, open: false });
   };
 
   const handleEndCall = () => {
@@ -421,7 +533,17 @@ const VideoMeet = () => {
 
   return (
     <div>
-      {askForUsername ? (
+      {/* WAITING SCREEN */}
+      {joinStatus === "waiting" && (
+        <div className="h-screen flex justify-center items-center bg-black text-white flex-col gap-5">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-white mb-4"></div>
+          <h2 className="text-2xl font-semibold">Waiting for the host to let you in...</h2>
+          <p className="text-zinc-400">Sit tight, you'll be admitted soon.</p>
+        </div>
+      )}
+
+      {/* AUTH SCREEN */}
+      {askForUsername && joinStatus === "idle" ? (
         <div className="h-screen flex justify-center items-center bg-gradient-to-br from-zinc-900 to-zinc-800 text-white">
           <div className="bg-white/5 backdrop-blur-md rounded-3xl p-10 shadow-2xl border border-white/10 flex flex-col items-center gap-6 max-w-[500px] w-[90%]">
             <h2 className="m-0 font-semibold text-3xl">Ready to join?</h2>
@@ -490,8 +612,24 @@ const VideoMeet = () => {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : joinStatus === "joined" ? (
         <div className="relative h-screen w-screen bg-zinc-950 overflow-hidden flex justify-center items-center">
+
+          {/* Waiting List OVERLAY (Host Only) */}
+          {isHost && waitingUsers.length > 0 && (
+            <div className="absolute top-5 left-5 z-50 bg-black/80 backdrop-blur border border-white/20 p-4 rounded-xl flex flex-col gap-3 min-w-[250px]">
+              <h3 className="text-white font-semibold text-sm">Waiting Room ({waitingUsers.length})</h3>
+              {waitingUsers.map(u => (
+                <div key={u.socketId} className="flex justify-between items-center text-white text-sm bg-zinc-800 p-2 rounded">
+                  <span>{u.username}</span>
+                  <div className="flex gap-1">
+                    <IconButton size="small" onClick={() => admitUser(u)} className="text-green-400 hover:bg-green-900/50"><CheckIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => rejectUser(u)} className="text-red-400 hover:bg-red-900/50"><CloseIcon fontSize="small" /></IconButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Controls Bar */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-5 px-6 py-3 bg-black backdrop-blur-md rounded-full border border-white/20 shadow-2xl z-50 transition-all hover:-translate-y-1">
             <IconButton onClick={toggleVideo} className={`${videoAvailable ? "text-white bg-transparent hover:bg-white/10" : "bg-[#E5CDCB] text-[#4E342E] hover:bg-[#d7cccb]"}`}>
@@ -518,12 +656,12 @@ const VideoMeet = () => {
               </IconButton>
             )}
 
-                        <Badge badgeContent={newMessages} max={999} color="secondary">
+            <Badge badgeContent={newMessages} max={999} color="secondary">
               <IconButton onClick={() => setShowChat(!showChat)} className={`${showChat ? "text-blue-500" : "text-white"} hover:bg-white/10`}>
                 <ChatIcon className="text-white hover:text-blue-500" />
               </IconButton>
             </Badge>
-                        <IconButton onClick={handleEndCall} className="text-white bg-red-500 hover:bg-red-600">
+            <IconButton onClick={handleEndCall} className="text-white bg-red-500 hover:bg-red-600">
               <CallEndIcon className="text-red-500 hover:text-red-600" />
             </IconButton>
           </div>
@@ -610,8 +748,8 @@ const VideoMeet = () => {
                     <div key={video.socketId} className="relative aspect-video bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 shadow-md">
                       {!video.videoEnabled && (
                         <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
-                          <Avatar sx={{ width: 40, height: 40, fontSize: '1rem', bgcolor: stringToColor(video.socketId) }}>
-                            {video.socketId.substring(0, 2).toUpperCase()}
+                          <Avatar sx={{ width: 40, height: 40, fontSize: '1rem', bgcolor: stringToColor(video.username || "Guest") }}>
+                            {video.username ? video.username.substring(0, 2).toUpperCase() : "U"}
                           </Avatar>
                         </div>
                       )}
@@ -620,7 +758,14 @@ const VideoMeet = () => {
                         autoPlay playsInline
                         className={`w-full h-full object-cover ${video.videoEnabled ? 'block' : 'hidden'}`}
                       />
-                      <div className="absolute bottom-2 left-2 text-xs text-white bg-black/50 px-2 py-0.5 rounded">{video.socketId}</div>
+                      <div className="absolute bottom-2 left-2 text-xs text-white bg-black/50 px-2 py-0.5 rounded">{video.username || video.socketId}</div>
+                      {isHost && (
+                        <div className="absolute top-2 right-2">
+                          <IconButton size="small" onClick={() => kickUser(video.socketId)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                            <RemoveCircleIcon fontSize="small" />
+                          </IconButton>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -640,8 +785,8 @@ const VideoMeet = () => {
                     <div key={video.socketId} className={`relative rounded-2xl overflow-hidden bg-zinc-900 shadow-md flex justify-center items-center transition-all ${videos.length === 1 ? 'w-full h-full max-w-6xl' : 'flex-1 min-w-[45%] max-w-full max-h-[48%] aspect-video'}`}>
                       {!video.videoEnabled && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900">
-                          <Avatar sx={{ bgcolor: stringToColor(video.socketId || "Remote"), width: 80, height: 80, fontSize: '2rem' }}>
-                            {video.socketId ? video.socketId.substring(0, 2).toUpperCase() : "U"}
+                          <Avatar sx={{ bgcolor: stringToColor(video.username || "Remote"), width: 80, height: 80, fontSize: '2rem' }}>
+                            {video.username ? video.username.substring(0, 2).toUpperCase() : "U"}
                           </Avatar>
                         </div>
                       )}
@@ -658,8 +803,16 @@ const VideoMeet = () => {
                       />
 
                       <div className="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded text-sm text-white pointer-events-none">
-                        {video.socketId}
+                        {video.username || video.socketId}
                       </div>
+
+                      {isHost && (
+                        <div className="absolute top-4 right-4 z-50">
+                          <IconButton size="small" onClick={() => kickUser(video.socketId)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                            <RemoveCircleIcon fontSize="small" />
+                          </IconButton>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -667,7 +820,32 @@ const VideoMeet = () => {
             )}
           </div>
         </div>
-      )}
+      ) : null}
+
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={notification.action ? 6000 : 4000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification.type || "info"}
+          sx={{ width: '100%', alignItems: 'center' }}
+          action={notification.action && (
+            <div className="flex gap-2">
+              <Button color="inherit" size="small" onClick={() => admitUser(notification.action)}>
+                Admit
+              </Button>
+              <Button color="inherit" size="small" onClick={() => rejectUser(notification.action)}>
+                Reject
+              </Button>
+            </div>
+          )}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

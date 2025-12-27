@@ -16,6 +16,8 @@ import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle"; // For kick
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import InfoIcon from "@mui/icons-material/Info";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { io } from "socket.io-client";
 import { Snackbar, Alert, Chip } from "@mui/material";
 import { AuthContext } from '../contexts/AuthContext';
@@ -70,6 +72,7 @@ const VideoMeet = () => {
   const [isHost, setIsHost] = useState(false);
   const [joinStatus, setJoinStatus] = useState("idle"); // idle, waiting, joined, rejected
   const [waitingUsers, setWaitingUsers] = useState([]);
+  const [showInfo, setShowInfo] = useState(false);
 
   // connect socket
   useEffect(() => {
@@ -516,6 +519,12 @@ const VideoMeet = () => {
       console.error("Error stopping screen share", err);
     }
   };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setNotification({ open: true, message: "Link copied to clipboard", type: "success" });
+    showInfo && setShowInfo(false);
+  };
   //   const getVideoButtonStyles = (isVideoOn) => ({
   //   backgroundColor: isVideoOn ? "#000000" : "#E5CDCB",
   //   color: isVideoOn ? "#ffffff" : "#6B3E2E",
@@ -612,60 +621,64 @@ const VideoMeet = () => {
         <div className="relative h-screen w-screen bg-zinc-950 overflow-hidden flex justify-center items-center">
 
           {/* Waiting List OVERLAY (Host Only) */}
-{isHost && waitingUsers.length > 0 && (
-  <div className="absolute top-5 left-5 z-50 w-[280px] 
+          {isHost && waitingUsers.length > 0 && (
+            <div className="absolute top-5 left-5 z-50 w-[280px] 
                   bg-white/90 backdrop-blur-lg 
                   border border-gray-200 
                   p-4 rounded-2xl shadow-xl 
                   flex flex-col gap-3">
-    
-    <h3 className="text-gray-800 font-semibold text-sm tracking-wide">
-      Waiting Room
-      <span className="ml-2 text-xs font-medium text-gray-500">
-        ({waitingUsers.length})
-      </span>
-    </h3>
 
-    <div className="flex flex-col gap-2">
-      {waitingUsers.map(u => (
-        <div
-          key={u.socketId}
-          className="flex justify-between items-center 
+              <h3 className="text-gray-800 font-semibold text-sm tracking-wide">
+                Waiting Room
+                <span className="ml-2 text-xs font-medium text-gray-500">
+                  ({waitingUsers.length})
+                </span>
+              </h3>
+
+              <div className="flex flex-col gap-2">
+                {waitingUsers.map(u => (
+                  <div
+                    key={u.socketId}
+                    className="flex justify-between items-center 
                      bg-gray-100 hover:bg-gray-200 
                      transition-colors duration-150
                      px-3 py-2 rounded-lg text-sm text-gray-800"
-        >
-          <span className="font-medium truncate">{u.username}</span>
+                  >
+                    <span className="font-medium truncate">{u.username}</span>
 
-          <div className="flex gap-2">
-            <IconButton
-              size="small"
-              onClick={() => admitUser(u)}
-              className="!bg-green-500 !text-white 
+                    <div className="flex gap-2">
+                      <IconButton
+                        size="small"
+                        onClick={() => admitUser(u)}
+                        className="!bg-green-500 !text-white 
                          hover:!bg-green-600 
                          shadow-sm rounded-full"
-            >
-              <CheckIcon fontSize="small" />
-            </IconButton>
+                      >
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
 
-            <IconButton
-              size="small"
-              onClick={() => rejectUser(u)}
-              className="!bg-red-500 !text-white 
+                      <IconButton
+                        size="small"
+                        onClick={() => rejectUser(u)}
+                        className="!bg-red-500 !text-white 
                          hover:!bg-red-600 
                          shadow-sm rounded-full"
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Controls Bar */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-5 px-6 py-3 bg-black backdrop-blur-md rounded-full border border-white/20 shadow-2xl z-50 transition-all hover:-translate-y-1">
+            <IconButton onClick={() => setShowInfo(true)} className="text-white hover:bg-white/10">
+              <InfoIcon className="text-white" />
+            </IconButton>
+
             <IconButton onClick={toggleVideo} className={`${videoAvailable ? "text-white bg-transparent hover:bg-white/10" : "bg-[#E5CDCB] text-[#4E342E] hover:bg-[#d7cccb]"}`}>
               {videoAvailable ? <VideocamIcon className="text-white bg-transparent hover:translate-y-1" /> : <VideocamOffIcon className="text-white bg-red-500 hover:bg-red-600 " />}
             </IconButton>
@@ -699,6 +712,33 @@ const VideoMeet = () => {
               <CallEndIcon className="text-red-500 hover:text-red-600" />
             </IconButton>
           </div>
+
+          {/* Meeting Info Popup */}
+          {showInfo && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-2xl shadow-2xl flex flex-col gap-4 min-w-[350px]">
+              <div className="flex justify-between items-center text-white">
+                <h3 className="text-xl font-semibold">Meeting Info</h3>
+                <IconButton onClick={() => setShowInfo(false)} size="small" className="text-white/70 hover:text-white hover:bg-white/10">
+                  <CloseIcon />
+                </IconButton>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-gray-300">Share this link with others we want to join:</p>
+                <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/10">
+                  <input
+                    type="text"
+                    readOnly
+                    value={window.location.href}
+                    className="bg-transparent text-white text-sm w-full outline-none"
+                  />
+                  <IconButton onClick={copyToClipboard} size="small" className="text-blue-400 hover:text-blue-300">
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Local Video - Floating */}
           <div className={`absolute bottom-5 right-5 w-[250px] h-[150px] rounded-xl border-2 border-white/20 shadow-2xl overflow-hidden z-30 transition-all duration-300 bg-black hover:scale-105`}>
@@ -816,7 +856,11 @@ const VideoMeet = () => {
                   </div>
                 ) : (
                   videos.map((video) => (
-                    <div key={video.socketId} className={`relative rounded-2xl overflow-hidden bg-zinc-900 shadow-md flex justify-center items-center transition-all ${videos.length === 1 ? 'w-full h-full max-w-6xl' : 'flex-1 min-w-[45%] max-w-full max-h-[48%] aspect-video'}`}>
+                    <div key={video.socketId} className={`relative rounded-2xl overflow-hidden bg-zinc-900 shadow-md flex justify-center items-center transition-all ${videos.length === 1 ? 'w-full h-full max-w-6xl' :
+                      videos.length === 2 ? 'w-[48%] h-full' :
+                        videos.length === 3 ? 'w-[48%] h-[46%]' :
+                          'flex-1 min-w-[45%] max-w-full max-h-[48%] aspect-video'
+                      }`}>
                       {!video.videoEnabled && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900">
                           <Avatar sx={{ bgcolor: stringToColor(video.username || "Remote"), width: 80, height: 80, fontSize: '2rem' }}>

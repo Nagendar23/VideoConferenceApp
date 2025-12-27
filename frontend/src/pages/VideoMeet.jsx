@@ -138,13 +138,19 @@ const VideoMeet = () => {
 
     pc.ontrack = (event) => {
       const remoteStream = event.streams[0];
+
+      let isVideoEnabled = false;
+      if (remoteStream.getVideoTracks().length > 0) {
+        isVideoEnabled = remoteStream.getVideoTracks()[0].enabled;
+      }
+
       setVideos((prev) => {
         const exists = prev.find((v) => v.socketId === neighborId);
         return exists
           ? prev.map((v) =>
-            v.socketId === neighborId ? { ...v, stream: remoteStream } : v
+            v.socketId === neighborId ? { ...v, stream: remoteStream, videoEnabled: isVideoEnabled } : v
           )
-          : [...prev, { socketId: neighborId, stream: remoteStream, videoEnabled: true, username: "Guest" }];
+          : [...prev, { socketId: neighborId, stream: remoteStream, videoEnabled: isVideoEnabled, username: "Guest" }];
       });
     };
 
@@ -241,18 +247,8 @@ const VideoMeet = () => {
         // Someone else joined
         setNotification({ open: true, message: `${username || "User"} joined the meet`, type: "info" });
 
-        // Connect to them
-        addConnection(id, null, async (pc) => {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit(
-            "signal",
-            id,
-            JSON.stringify({ sdp: pc.localDescription })
-          );
-        });
-
-        // Update their name in video state
+        // WAIT for them to offer. Do NOT initiate connection.
+        // Just add a placeholder in UI so we see them in list
         setVideos(prev => {
           const exists = prev.find(v => v.socketId === id);
           if (exists) return prev.map(v => v.socketId === id ? { ...v, username: username } : v);
@@ -616,20 +612,58 @@ const VideoMeet = () => {
         <div className="relative h-screen w-screen bg-zinc-950 overflow-hidden flex justify-center items-center">
 
           {/* Waiting List OVERLAY (Host Only) */}
-          {isHost && waitingUsers.length > 0 && (
-            <div className="absolute top-5 left-5 z-50 bg-black/80 backdrop-blur border border-white/20 p-4 rounded-xl flex flex-col gap-3 min-w-[250px]">
-              <h3 className="text-white font-semibold text-sm">Waiting Room ({waitingUsers.length})</h3>
-              {waitingUsers.map(u => (
-                <div key={u.socketId} className="flex justify-between items-center text-white text-sm bg-zinc-800 p-2 rounded">
-                  <span>{u.username}</span>
-                  <div className="flex gap-1">
-                    <IconButton size="small" onClick={() => admitUser(u)} className="text-green-400 hover:bg-green-900/50"><CheckIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" onClick={() => rejectUser(u)} className="text-red-400 hover:bg-red-900/50"><CloseIcon fontSize="small" /></IconButton>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+{isHost && waitingUsers.length > 0 && (
+  <div className="absolute top-5 left-5 z-50 w-[280px] 
+                  bg-white/90 backdrop-blur-lg 
+                  border border-gray-200 
+                  p-4 rounded-2xl shadow-xl 
+                  flex flex-col gap-3">
+    
+    <h3 className="text-gray-800 font-semibold text-sm tracking-wide">
+      Waiting Room
+      <span className="ml-2 text-xs font-medium text-gray-500">
+        ({waitingUsers.length})
+      </span>
+    </h3>
+
+    <div className="flex flex-col gap-2">
+      {waitingUsers.map(u => (
+        <div
+          key={u.socketId}
+          className="flex justify-between items-center 
+                     bg-gray-100 hover:bg-gray-200 
+                     transition-colors duration-150
+                     px-3 py-2 rounded-lg text-sm text-gray-800"
+        >
+          <span className="font-medium truncate">{u.username}</span>
+
+          <div className="flex gap-2">
+            <IconButton
+              size="small"
+              onClick={() => admitUser(u)}
+              className="!bg-green-500 !text-white 
+                         hover:!bg-green-600 
+                         shadow-sm rounded-full"
+            >
+              <CheckIcon fontSize="small" />
+            </IconButton>
+
+            <IconButton
+              size="small"
+              onClick={() => rejectUser(u)}
+              className="!bg-red-500 !text-white 
+                         hover:!bg-red-600 
+                         shadow-sm rounded-full"
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
           {/* Controls Bar */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-5 px-6 py-3 bg-black backdrop-blur-md rounded-full border border-white/20 shadow-2xl z-50 transition-all hover:-translate-y-1">
             <IconButton onClick={toggleVideo} className={`${videoAvailable ? "text-white bg-transparent hover:bg-white/10" : "bg-[#E5CDCB] text-[#4E342E] hover:bg-[#d7cccb]"}`}>

@@ -89,8 +89,8 @@ io.on('connection', (socket) => {
       // Notify accepted user about existing users
       io.to(socketId).emit("user-joined", socketId, existingUsers, userMap[socketId]);
 
-      // Notify others about new user
-      socket.broadcast.to(path).emit("user-joined", socketId, [], userMap[socketId]);
+      // Notify others (AND the host) about new user
+      io.to(path).emit("user-joined", socketId, [], userMap[socketId]);
 
       // If screen share active, tell new user
       if (activeScreenSharerId) {

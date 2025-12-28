@@ -1,52 +1,49 @@
-import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
-import Avatar from '@mui/material/Avatar';
-import Button from '@mui/material/Button';
-import CssBaseline from '@mui/material/CssBaseline';
-import TextField from '@mui/material/TextField';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
-import Link from '@mui/material/Link';
-import Paper from '@mui/material/Paper';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import Typography from '@mui/material/Typography';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
+import React, { useContext, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { Snackbar } from '@mui/material';
+import { Snackbar, Alert } from '@mui/material'; // Keep Snackbar for now or replace with custom toast later if needed
 
-const defaultTheme = createTheme();
+const Authentication = () => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-export default function Authentication() {
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [error, setError] = React.useState();
-  const [message, setMessage] = React.useState();
-  const [formState, setFormState] = React.useState(0);
-  const [open, setOpen] = React.useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // 0 = Login, 1 = Register
+  const [formState, setFormState] = useState(location.state?.formState || 0);
+  const [open, setOpen] = useState(false);
 
-  const { handleRegister, handleLogin } = React.useContext(AuthContext);
+  const { handleRegister, handleLogin } = useContext(AuthContext);
 
-  let handleAuth = async () => {
+  useEffect(() => {
+    // Reset errors when switching modes
+    setError("");
+    setMessage("");
+  }, [formState]);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
     try {
       if (formState === 0) {
-        let result = await handleLogin(email, password);
-        console.log(result);
+        // LOGIN
+        await handleLogin(email, password);
         navigate("/dashboard");
-      }
-      if (formState === 1) {
+      } else {
+        // REGISTER
         let result = await handleRegister(name, email, username, password);
         console.log(result);
         setUsername("");
+        setName("");
+        setPassword("");
+        setEmail("");
         setMessage(result);
         setOpen(true);
         setError("");
-        setFormState(0);
-        setPassword("");
-        setEmail("");
+        setFormState(0); // Switch to login after success
       }
     } catch (err) {
       console.log(err);
@@ -56,129 +53,137 @@ export default function Authentication() {
   };
 
   return (
-    <ThemeProvider theme={defaultTheme}>
-      <Grid container component="main" sx={{ height: '100vh' }}>
-        <CssBaseline />
+    <div className='min-h-screen w-full bg-zinc-950 font-sans text-gray-100 flex items-center justify-center relative overflow-hidden p-6'>
 
-        {/* Background image section */}
-        <Grid item xs={false} sm={4} md={7} sx={{ position: 'relative' }}>
-          <Box
-            component="img"
-            src="/images/signin.png"
-            alt="Sign In"
-            sx={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
-        </Grid>
+      {/* BACKGROUND TEXTURE (Consistent with Landing Page) */}
+      <div className="absolute inset-0 max-w-full z-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-sky-900/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/20 rounded-full blur-[120px]" />
+      </div>
 
-        {/* Form section */}
-        <Grid item xs={12} sm={8} md={5} component={Paper} elevation={6} square>
-          <Box
-            sx={{
-              my: 8,
-              mx: 4,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
+      {/* Main Card */}
+      <div className="relative z-10 w-full max-w-md bg-zinc-900/60 border border-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl p-8">
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className='text-3xl font-bold tracking-tight mb-2 bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-blue-500'>
+            {formState === 0 ? "Welcome Back" : "Create Account"}
+          </h2>
+          <p className="text-zinc-400 text-sm">
+            {formState === 0 ? "Enter your credentials to access your account" : "Join us and start collaborating securely"}
+          </p>
+        </div>
+
+        {/* Toggle (Login / Register) */}
+        <div className="flex bg-zinc-950/50 p-1.5 rounded-xl mb-8 border border-white/5">
+          <button
+            onClick={() => setFormState(0)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${formState === 0 ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
-            <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
-              <LockOutlinedIcon />
-            </Avatar>
+            Sign In
+          </button>
+          <button
+            onClick={() => setFormState(1)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${formState === 1 ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            Sign Up
+          </button>
+        </div>
 
-            <div>
-              <Button
-                variant={formState === 0 ? "contained" : ""}
-                onClick={() => { setFormState(0) }}
-              >
-                Sign In
-              </Button>
-              <Button
-                variant={formState === 1 ? "contained" : ""}
-                onClick={() => { setFormState(1) }}
-              >
-                Sign Up
-              </Button>
-            </div>
+        {/* Form */}
+        <form onSubmit={handleAuth} className="space-y-5">
 
-            <Box component="form" noValidate sx={{ mt: 1 }}>
-              {formState === 1 ? (
-                <TextField
-                  margin="normal"
+          {formState === 1 && (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide ml-1">Full Name</label>
+                <input
+                  type="text"
                   required
-                  fullWidth
-                  id="name"
-                  label="Full Name"
-                  name="name"
                   value={name}
-                  autoFocus
                   onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-zinc-950/50 text-white px-4 py-3 rounded-xl border border-zinc-800 focus:border-sky-500/50 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600"
+                  placeholder="John Doe"
                 />
-              ) : null}
-
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="email"
-                label="Email Address"
-                name="email"
-                value={email}
-                autoFocus
-                onChange={(e) => setEmail(e.target.value)}
-              />
-
-              {formState === 1 ? (
-                <TextField
-                  margin="normal"
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide ml-1">Username</label>
+                <input
+                  type="text"
                   required
-                  fullWidth
-                  id="username"
-                  label="Username"
-                  name="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-zinc-950/50 text-white px-4 py-3 rounded-xl border border-zinc-800 focus:border-sky-500/50 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600"
+                  placeholder="@johndoe"
                 />
-              ) : null}
+              </div>
+            </>
+          )}
 
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                name="password"
-                label="Password"
-                value={password}
-                type="password"
-                onChange={(e) => setPassword(e.target.value)}
-                id="password"
-              />
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide ml-1">Email Address</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-zinc-950/50 text-white px-4 py-3 rounded-xl border border-zinc-800 focus:border-sky-500/50 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600"
+              placeholder="name@example.com"
+            />
+          </div>
 
-              <p className="text-red-500">{error}</p>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wide ml-1">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-zinc-950/50 text-white px-4 py-3 rounded-xl border border-zinc-800 focus:border-sky-500/50 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600"
+              placeholder="••••••••"
+            />
+          </div>
 
-              <Button
-                type="button"
-                fullWidth
-                variant="contained"
-                sx={{ mt: 3, mb: 2 }}
-                onClick={handleAuth}
-              >
-                {formState === 0 ? "Login " : "Register"}
-              </Button>
-            </Box>
-          </Box>
-        </Grid>
-      </Grid>
+          {error && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold shadow-lg shadow-sky-500/20 hover:opacity-90 hover:shadow-sky-500/40 hover:translate-y-[-1px] active:translate-y-[0px] transition-all duration-200 mt-2"
+          >
+            {formState === 0 ? "Sign In" : "Create Account"}
+          </button>
+
+        </form>
+
+        {/* Footer Text */}
+        <p className="mt-8 text-center text-zinc-500 text-sm">
+          {formState === 0 ? "Don't have an account?" : "Already have an account?"}{" "}
+          <button
+            onClick={() => setFormState(formState === 0 ? 1 : 0)}
+            className="text-sky-400 font-semibold hover:text-sky-300 transition-colors"
+          >
+            {formState === 0 ? "Sign Up" : "Sign In"}
+          </button>
+        </p>
+
+      </div>
 
       <Snackbar
         open={open}
         autoHideDuration={4000}
-        message={message}
-      />
-    </ThemeProvider>
+        onClose={() => setOpen(false)}
+      >
+        <Alert severity="success" sx={{ width: '100%' }}>
+          {message}
+        </Alert>
+      </Snackbar>
+
+    </div>
   );
 }
+
+export default Authentication;

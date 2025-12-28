@@ -12,4 +12,8 @@ export default defineConfig({
   optimizeDeps: {
     include: ["buffer"],
   },
+  define: {
+    'process.env.SERVER': JSON.stringify(process.env.SERVER || 'development'),
+    'process.env.BACKEND_URI': JSON.stringify(process.env.BACKEND_URI || 'http://localhost:8000'),
+  },
 });

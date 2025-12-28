@@ -76,7 +76,8 @@ const VideoMeet = () => {
 
   // connect socket
   useEffect(() => {
-    const newSocket = io("http://localhost:8000/");
+    const isProd=process.env.SERVER==='production';
+    const newSocket = isProd ? io(process.env.BACKEND_URI) : io("http://localhost:8000/");
     setSocket(newSocket);
 
     return () => {
@@ -620,7 +621,6 @@ const VideoMeet = () => {
                 borderRadius: "12px",
                 color: 'black',
                 fontWeight: "bold",
-                color: 'black',
                 padding: "12px",
                 fontSize: "1.1rem",
                 textTransform: "none",

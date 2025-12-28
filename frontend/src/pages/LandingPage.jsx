@@ -3,11 +3,21 @@ import { Link, useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [joinCode, setJoinCode] = React.useState("");
 
   const handleJoinGuest = () => {
     // Generate simple 6-char random code
     const randomCode = Math.random().toString(36).substring(2, 8);
     navigate(`/${randomCode}`);
+  };
+
+  const handleJoinByCode = () => {
+    if (!joinCode.trim()) return;
+    // Extract code if full URL is pasted
+    const code = joinCode.includes('/')
+      ? joinCode.split('/').filter(Boolean).pop()
+      : joinCode;
+    navigate(`/${code}`);
   };
 
   return (
@@ -84,28 +94,38 @@ const LandingPage = () => {
             >
               Start Instant Meeting
             </button>
-            <Link
-              to="/auth"
-              state={{ formState: 1 }}
-              className='px-8 py-4 bg-zinc-800/50 text-white border border-zinc-700/50 hover:bg-zinc-800 hover:border-zinc-600 rounded-xl font-semibold text-lg transition-all backdrop-blur-sm flex justify-center items-center'
-            >
-              Create Account
-            </Link>
+            <div className='flex items-center gap-2 bg-zinc-800/50 rounded-xl p-2 border border-zinc-700/50 backdrop-blur-sm'>
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Enter meeting code"
+                className='bg-transparent border-none text-white placeholder:text-gray-500 focus:outline-none px-4 py-2 w-40 md:w-48'
+                onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
+              />
+              <button
+                onClick={handleJoinByCode}
+                className={`p-3 rounded-lg transition-all ${joinCode.trim() ? 'bg-zinc-700 text-white hover:bg-zinc-600 shadow-lg' : 'bg-zinc-800/50 text-gray-500 cursor-not-allowed'}`}
+                disabled={!joinCode.trim()}
+              >
+                <span className="font-bold text-sm">Join</span>
+              </button>
+            </div>
           </div>
 
-<div className="py-4">
-  <p className="text-lg md:text-xl text-gray-400 font-light leading-relaxed">
-    Share your{" "}
-    <span className="font-medium text-gray-100">screen</span>,{" "}
-    <span className="font-medium text-gray-100">voice</span>, and{" "}
-    <span className="font-medium text-gray-100">ideas</span>
-    <span className="text-gray-500"> — </span>
-    <span className="bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-blue-500 font-semibold">
-      seamlessly
-    </span>
-    .
-  </p>
-</div>
+          <div className="py-4">
+            <p className="text-lg md:text-xl text-gray-400 font-light leading-relaxed">
+              Share your{" "}
+              <span className="font-medium text-gray-100">screen</span>,{" "}
+              <span className="font-medium text-gray-100">voice</span>, and{" "}
+              <span className="font-medium text-gray-100">ideas</span>
+              <span className="text-gray-500"> — </span>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-blue-500 font-semibold">
+                seamlessly
+              </span>
+              .
+            </p>
+          </div>
 
         </div>
 

@@ -10,7 +10,8 @@ import { Buffer } from "buffer";
 window.Buffer = Buffer;
 
 // Connect to backend Socket.IO server
-const socket = io("http://localhost:8000/");
+const isProd = process.env.SERVER === "production";
+const socket = isProd ? io(process.env.BACKEND_URI) : io("http://localhost:8000/");
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

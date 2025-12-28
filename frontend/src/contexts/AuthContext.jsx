@@ -4,8 +4,10 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 export const AuthContext = createContext();
 
+isProd = process.env.SERVER === 'production';
 export const client = axios.create({
-  baseURL: "http://localhost:8000/api/v1/users",
+
+  baseURL: isProd ? process.env.BACKEND_URI + "/api/v1/users" : "http://localhost:8000/api/v1/users",
 });
 
 export const AuthProvider = ({ children }) => {

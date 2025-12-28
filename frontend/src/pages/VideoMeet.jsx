@@ -76,7 +76,7 @@ const VideoMeet = () => {
 
   // connect socket
   useEffect(() => {
-    const newSocket = io("http://localhost:8000");
+    const newSocket = io("https://videoconferenceapp-sr1r.onrender.com/");
     setSocket(newSocket);
 
     return () => {

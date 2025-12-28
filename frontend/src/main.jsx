@@ -10,7 +10,7 @@ import { Buffer } from "buffer";
 window.Buffer = Buffer;
 
 // Connect to backend Socket.IO server
-const socket = io("http://localhost:8000");
+const socket = io("https://videoconferenceapp-sr1r.onrender.com/");
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

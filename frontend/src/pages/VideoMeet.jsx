@@ -80,8 +80,26 @@ const VideoMeet = () => {
     console.log("VideoMeet - isProd:", isProd);
     console.log("VideoMeet - VITE_SERVER:", import.meta.env.VITE_SERVER);
     console.log("VideoMeet - VITE_BACKEND_URI:", import.meta.env.VITE_BACKEND_URI);
-    const newSocket = isProd ? io(import.meta.env.VITE_BACKEND_URI) : io("http://localhost:8000/");
-    console.log("VideoMeet - Socket connecting to:", isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/");
+    
+    const socketUrl = isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/";
+    const newSocket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+    
+    console.log("VideoMeet - Socket connecting to:", socketUrl);
+    
+    newSocket.on('connect', () => {
+      console.log('✅ Socket connected:', newSocket.id);
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error);
+    });
+    
     setSocket(newSocket);
 
     return () => {

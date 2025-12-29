@@ -14,8 +14,25 @@ const isProd = import.meta.env.VITE_SERVER === "production";
 console.log("Main.jsx - isProd:", isProd);
 console.log("Main.jsx - VITE_SERVER:", import.meta.env.VITE_SERVER);
 console.log("Main.jsx - VITE_BACKEND_URI:", import.meta.env.VITE_BACKEND_URI);
-const socket = isProd ? io(import.meta.env.VITE_BACKEND_URI) : io("http://localhost:8000/");
-console.log("Main.jsx - Socket connecting to:", isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/");
+
+const socketUrl = isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/";
+const socket = io(socketUrl, {
+  transports: ['websocket', 'polling'],
+  withCredentials: true,
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionAttempts: 5,
+});
+
+console.log("Main.jsx - Socket connecting to:", socketUrl);
+
+socket.on('connect', () => {
+  console.log('✅ Main socket connected:', socket.id);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('❌ Main socket connection error:', error);
+});
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -20,12 +20,20 @@ const server = createServer(app);
 
 const isProd = process.env.SERVER === "production";
 
+console.log('🌍 Environment:', isProd ? 'production' : 'development');
+console.log('🔗 Frontend URI:', isProd ? process.env.FRONTEND_URI : "http://localhost:5173");
+console.log('🔗 Backend URI:', isProd ? process.env.BACKEND_URI : "http://localhost:8000");
+
 // configure socket.io
 const io = new Server(server, {
   cors: {
-    origin: isProd ? process.env.FRONTEND_URI : "http://localhost:5173", // Vite dev server
+    origin: isProd ? process.env.FRONTEND_URI : "http://localhost:5173",
     methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type"],
   },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
 });
 
 // global state

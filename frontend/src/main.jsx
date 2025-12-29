@@ -10,8 +10,12 @@ import { Buffer } from "buffer";
 window.Buffer = Buffer;
 
 // Connect to backend Socket.IO server
-const isProd = process.env.SERVER === "production";
-const socket = isProd ? io(process.env.BACKEND_URI) : io("http://localhost:8000/");
+const isProd = import.meta.env.VITE_SERVER === "production";
+console.log("Main.jsx - isProd:", isProd);
+console.log("Main.jsx - VITE_SERVER:", import.meta.env.VITE_SERVER);
+console.log("Main.jsx - VITE_BACKEND_URI:", import.meta.env.VITE_BACKEND_URI);
+const socket = isProd ? io(import.meta.env.VITE_BACKEND_URI) : io("http://localhost:8000/");
+console.log("Main.jsx - Socket connecting to:", isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/");
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -1,10 +1,17 @@
 // backend/app.js
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import mongoose from 'mongoose';
 import cors from 'cors';
+
+// Load .env from root directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 import userRoutes from './routes/users.routes.js';
 
@@ -37,6 +44,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("join-request", (path, username) => {
+    console.log(`📥 Join request received - Path: ${path}, Username: ${username}, SocketID: ${socket.id}`);
     userMap[socket.id] = username || "Guest";
 
     // Check if room has a host

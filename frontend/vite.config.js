@@ -1,19 +1,22 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import inject from "@rollup/plugin-inject";
+import path from "path";
 
-export default defineConfig({
-  plugins: [
-    react(),
-    inject({
-      Buffer: ["buffer", "Buffer"],
-    }),
-  ],
-  optimizeDeps: {
-    include: ["buffer"],
-  },
-  define: {
-    'process.env.SERVER': JSON.stringify(process.env.SERVER || 'development'),
-    'process.env.BACKEND_URI': JSON.stringify(process.env.BACKEND_URI || 'http://localhost:8000'),
-  },
+export default defineConfig(({ mode }) => {
+  // Load env from root directory
+  const env = loadEnv(mode, path.resolve(__dirname, '..'), '');
+  
+  return {
+    plugins: [
+      react(),
+      inject({
+        Buffer: ["buffer", "Buffer"],
+      }),
+    ],
+    optimizeDeps: {
+      include: ["buffer"],
+    },
+    envDir: path.resolve(__dirname, '..'), // Load .env from root
+  };
 });

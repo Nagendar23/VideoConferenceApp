@@ -650,7 +650,7 @@ const VideoMeet = () => {
                 boxShadow: "0 3px 5px 2px rgba(33, 203, 243, .3)",
               }}
             >
-              Join Meeting
+              <span className="text-black">Join Meeting</span>
             </Button>
           </div>
         </div>

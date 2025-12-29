@@ -6,6 +6,7 @@ import Authentication from './pages/Authentication';
 import { AuthProvider } from './contexts/AuthContext';
 import VideoMeet from './pages/VideoMeet';
 import Dashboard from './pages/Dashboard';
+import NotFound from './pages/NotFound';
 import RequireAuth from './utils/RequireAuth';
 import { Buffer } from 'buffer';
 
@@ -22,6 +23,7 @@ function App() {
             <Route path="/auth" element={<Authentication />} />
             <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/:url" element={<VideoMeet />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
       </Router>

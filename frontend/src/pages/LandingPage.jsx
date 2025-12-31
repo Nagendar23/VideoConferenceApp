@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { userData } = useContext(AuthContext);
   const [joinCode, setJoinCode] = React.useState("");
 
   const handleJoinGuest = () => {
@@ -49,21 +51,33 @@ const LandingPage = () => {
             Join as Guest
           </button>
 
-          <Link
-            to="/auth"
-            state={{ formState: 1 }}
-            className='hidden md:block text-gray-300 hover:text-white transition-colors font-medium cursor-pointer'
-          >
-            Register
-          </Link>
+          {!userData ? (
+            <>
+              <Link
+                to="/auth"
+                state={{ formState: 1 }}
+                className='hidden md:block text-gray-300 hover:text-white transition-colors font-medium cursor-pointer'
+              >
+                Register
+              </Link>
 
-          <Link
-            to="/auth"
-            state={{ formState: 0 }}
-            className='px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full font-semibold hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 cursor-pointer'
-          >
-            Login
-          </Link>
+              <Link
+                to="/auth"
+                state={{ formState: 0 }}
+                className='px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full font-semibold hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 cursor-pointer'
+              >
+                Login
+              </Link>
+            </>
+          ) : (
+            <Link
+              to="/dashboard"
+              className='px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full font-semibold hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 cursor-pointer'
+            >
+              Dashboard
+            </Link>
+          )}
+
         </div>
       </nav>
 

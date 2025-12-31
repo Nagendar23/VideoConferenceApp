@@ -92,12 +92,12 @@ export const AuthProvider = ({ children }) => {
         try {
           const history = await getHistoryOfUser();
           setUserData(history); // Or fetching user profile
-          navigate("/dashboard");
+          // Removed automatic navigation to dashboard to allow deep linking (e.g., meeting rooms)
         } catch (e) {
           console.log("Check session error", e);
           // Token invalid or other error
           localStorage.removeItem("token");
-          navigate("/auth");
+          // navigate("/auth"); // Optional: Might annoy users if API just flaked, but safe for security
         }
       }
     }

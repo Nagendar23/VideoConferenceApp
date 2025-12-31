@@ -17,7 +17,14 @@ const Authentication = () => {
   const [formState, setFormState] = useState(location.state?.formState || 0);
   const [open, setOpen] = useState(false);
 
-  const { handleRegister, handleLogin } = useContext(AuthContext);
+  const { handleRegister, handleLogin, userData } = useContext(AuthContext);
+
+  useEffect(() => {
+    // If already logged in, redirect to dashboard
+    if (localStorage.getItem("token") || userData) {
+      navigate("/dashboard");
+    }
+  }, [userData, navigate]);
 
   useEffect(() => {
     // Reset errors when switching modes

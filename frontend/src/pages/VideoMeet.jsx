@@ -61,7 +61,9 @@ const VideoMeet = () => {
   const [videos, setVideos] = useState([]);
   const [askForUsername, setAskForUsername] = useState(true);
   const [username, setUsername] = useState("");
-  const [newMessages] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+  const [newMessages, setNewMessages] = useState(0);
   const [showChat, setShowChat] = useState(false);
   const [streamReady, setStreamReady] = useState(false);
   const [screenSharerId, setScreenSharerId] = useState(null);
@@ -80,7 +82,7 @@ const VideoMeet = () => {
     console.log("VideoMeet - isProd:", isProd);
     console.log("VideoMeet - VITE_SERVER:", import.meta.env.VITE_SERVER);
     console.log("VideoMeet - VITE_BACKEND_URI:", import.meta.env.VITE_BACKEND_URI);
-    
+
     const socketUrl = isProd ? import.meta.env.VITE_BACKEND_URI : "http://localhost:8000/";
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling'],
@@ -89,17 +91,17 @@ const VideoMeet = () => {
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
     });
-    
+
     console.log("VideoMeet - Socket connecting to:", socketUrl);
-    
+
     newSocket.on('connect', () => {
       console.log('✅ Socket connected:', newSocket.id);
     });
-    
+
     newSocket.on('connect_error', (error) => {
       console.error('❌ Socket connection error:', error);
     });
-    
+
     setSocket(newSocket);
 
     return () => {
@@ -386,7 +388,14 @@ const VideoMeet = () => {
       setIsScreenSharing(false);
     });
 
-    // Cleanup for this specific listener if expected, but might be redundant if main useEffect handles socket disconnect well.
+    socket.on("chat-message", (data) => {
+      // data: { sender, message, timestamp }
+      setMessages((prev) => [...prev, data]);
+      if (!showChat) {
+        setNewMessages((prev) => prev + 1);
+      }
+    });
+
     return () => {
       socket.off("video-toggle");
       socket.off("screen-share-started");
@@ -396,6 +405,7 @@ const VideoMeet = () => {
       socket.off("join-rejected");
       socket.off("kicked");
       socket.off("user-requested-join");
+      socket.off("chat-message");
     };
   }, [socket]);
 
@@ -431,30 +441,114 @@ const VideoMeet = () => {
     window.location.reload();
   };
 
-  const toggleVideo = () => {
+  const toggleVideo = async () => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const tracks = stream.getVideoTracks();
-    if (!tracks.length) return;
-    const enabled = !tracks[0].enabled;
-    tracks.forEach((t) => (t.enabled = enabled));
-    setVideoAvailable(enabled);
-    if (!askForUsername) {
-      socket.emit("video-toggle", enabled);
+    
+    const currentVideoTrack = stream.getVideoTracks()[0];
+    if (!currentVideoTrack) return;
+    
+    if (videoAvailable) {
+      // Turn OFF: Stop the camera and replace with black track
+      stream.getVideoTracks().forEach(track => track.stop());
+      
+      const blackTrack = black();
+      stream.removeTrack(currentVideoTrack);
+      stream.addTrack(blackTrack);
+      
+      // Update all peer connections
+      Object.values(connections).forEach((pc) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === "video");
+        if (videoSender) {
+          videoSender.replaceTrack(blackTrack);
+        }
+      });
+      
+      setVideoAvailable(false);
+      if (!askForUsername) {
+        socket.emit("video-toggle", false);
+      }
+    } else {
+      // Turn ON: Get real camera and replace black track
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        
+        stream.removeTrack(currentVideoTrack);
+        currentVideoTrack.stop();
+        stream.addTrack(newVideoTrack);
+        
+        // Update all peer connections
+        Object.values(connections).forEach((pc) => {
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === "video");
+          if (videoSender) {
+            videoSender.replaceTrack(newVideoTrack);
+          }
+        });
+        
+        setVideoAvailable(true);
+        if (!askForUsername) {
+          socket.emit("video-toggle", true);
+        }
+      } catch (err) {
+        console.error("Failed to turn on camera:", err);
+        setNotification({ open: true, message: "Failed to access camera", type: "error" });
+      }
     }
   };
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const tracks = stream.getAudioTracks();
-    if (!tracks.length) return;
-    const enabled = !tracks[0].enabled;
-    tracks.forEach((t) => (t.enabled = enabled));
-    setAudioAvailable(enabled);
-
-    // We don't have an audio-toggle event on server yet usually, but if we did:
-    // if (!askForUsername) socket.emit("audio-toggle", enabled);
+    
+    const currentAudioTrack = stream.getAudioTracks()[0];
+    if (!currentAudioTrack) return;
+    
+    if (audioAvailable) {
+      // Turn OFF: Stop the microphone and replace with silent track
+      stream.getAudioTracks().forEach(track => track.stop());
+      
+      const silentTrack = silence();
+      stream.removeTrack(currentAudioTrack);
+      stream.addTrack(silentTrack);
+      
+      // Update all peer connections
+      Object.values(connections).forEach((pc) => {
+        const senders = pc.getSenders();
+        const audioSender = senders.find(s => s.track && s.track.kind === "audio");
+        if (audioSender) {
+          audioSender.replaceTrack(silentTrack);
+        }
+      });
+      
+      setAudioAvailable(false);
+    } else {
+      // Turn ON: Get real microphone and replace silent track
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        
+        stream.removeTrack(currentAudioTrack);
+        currentAudioTrack.stop();
+        stream.addTrack(newAudioTrack);
+        
+        // Update all peer connections
+        Object.values(connections).forEach((pc) => {
+          const senders = pc.getSenders();
+          const audioSender = senders.find(s => s.track && s.track.kind === "audio");
+          if (audioSender) {
+            audioSender.replaceTrack(newAudioTrack);
+          }
+        });
+        
+        setAudioAvailable(true);
+      } catch (err) {
+        console.error("Failed to turn on microphone:", err);
+        setNotification({ open: true, message: "Failed to access microphone", type: "error" });
+      }
+    }
   };
 
   const startScreenShare = async () => {
@@ -507,8 +601,9 @@ const VideoMeet = () => {
       }
       localStreamRef.current = screenStream; // Keep track for new connections
       setVideoAvailable(true); // Screen share implies video is on
-
-      // If we don't get 'screen-share-started' back (denied), we should handle that via listener to Revert.
+      if (localVideoRef.current) {
+        localVideoRef.current.classList.remove("scale-x-[-1]"); // Remove mirror effect for screen share
+      }
 
     } catch (err) {
       console.error("Failed to share screen", err);
@@ -525,6 +620,11 @@ const VideoMeet = () => {
       // Revert to camera
       await getPermissions(); // This resets localStreamRef to camera
 
+      // Mirror local video again if needed (default camera usually mirrored)
+      if (localVideoRef.current) {
+        localVideoRef.current.classList.add("scale-x-[-1]");
+      }
+
       // Replace tracks in connections
       const cameraTrack = localStreamRef.current.getVideoTracks()[0];
       Object.values(connections).forEach((pc) => {
@@ -540,6 +640,13 @@ const VideoMeet = () => {
       setScreenSharerId(null);
     } catch (err) {
       console.error("Error stopping screen share", err);
+    }
+  };
+
+  const sendMessage = () => {
+    if (message.trim() && socket) {
+      socket.emit("chat-message", message);
+      setMessage("");
     }
   };
 
@@ -778,9 +885,12 @@ const VideoMeet = () => {
             )}
 
             {/* Chat */}
-            <Badge badgeContent={newMessages} color="error" overlap="circular" variant="dot">
+            <Badge badgeContent={newMessages} color="error" overlap="circular" max={99}>
               <IconButton
-                onClick={() => setShowChat(!showChat)}
+                onClick={() => {
+                  setShowChat(!showChat);
+                  setNewMessages(0);
+                }}
                 className={`group !transition-all !duration-200 !border ${showChat
                   ? '!bg-blue-600 hover:!bg-blue-700 !border-blue-500 !text-white !shadow-lg !shadow-blue-600/20'
                   : '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'}`}
@@ -804,25 +914,94 @@ const VideoMeet = () => {
 
           {/* Meeting Info Popup */}
           {showInfo && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-2xl shadow-2xl flex flex-col gap-4 min-w-[350px]">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-zinc-900/90 backdrop-blur-xl border border-white/10 p-6 rounded-2xl shadow-2xl flex flex-col gap-4 min-w-[350px]">
               <div className="flex justify-between items-center text-white">
                 <h3 className="text-xl font-semibold">Meeting Info</h3>
-                <IconButton onClick={() => setShowInfo(false)} size="small" className="text-white/70 hover:text-white hover:bg-white/10">
-                  <CloseIcon />
+                <IconButton onClick={() => setShowInfo(false)} size="small" className="!text-white hover:!bg-red-600">
+                  <CloseIcon/>
                 </IconButton>
               </div>
 
               <div className="flex flex-col gap-2">
-                <p className="text-sm text-gray-300">Share this link with others we want to join:</p>
+                <p className="text-sm text-gray-300">Share this link with others joining:</p>
                 <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/10">
                   <input
                     type="text"
                     readOnly
                     value={window.location.href}
-                    className="bg-transparent text-white text-sm w-full outline-none"
+                    className="bg-transparent text-white text-sm w-full outline-none px-2"
                   />
-                  <IconButton onClick={copyToClipboard} size="small" className="text-blue-400 hover:text-blue-300">
+                  <IconButton onClick={copyToClipboard} size="small" className="!text-white hover:!bg-blue-300">
                     <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CHAT CONTAINER */}
+          {showChat && (
+            <div className="absolute top-[80px] right-5 bottom-[100px] w-full max-w-sm z-[60] bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center bg-zinc-900">
+                <h3 className="text-white font-semibold">In-Call Messages</h3>
+                <IconButton onClick={() => setShowChat(false)} size="small" className="text-white/50 hover:text-white">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </div>
+
+              {/* Messages List */}
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scrollbar-hide">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-2">
+                    <ChatIcon sx={{ fontSize: 40, opacity: 0.2 }} />
+                    <p className="text-sm">No messages yet</p>
+                  </div>
+                ) : (
+                  messages.map((msg, i) => {
+                    const isMe = msg.sender === username;
+                    return (
+                      <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                          {!isMe && (
+                            <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem', bgcolor: stringToColor(msg.sender) }}>
+                              {msg.sender[0]}
+                            </Avatar>
+                          )}
+                          <div className={`px-3 py-2 rounded-2xl text-sm break-words ${isMe
+                            ? 'bg-blue-600 text-white rounded-tr-none'
+                            : 'bg-zinc-800 text-gray-200 rounded-tl-none'
+                            }`}>
+                            {msg.message}
+                          </div>
+                        </div>
+                        {/* <span className="text-[10px] text-zinc-500 mt-1 px-1">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span> */}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Input Area */}
+              <div className="p-3 bg-zinc-900 border-t border-white/10">
+                <div className="flex gap-2 items-center bg-zinc-800/50 p-2 rounded-xl border border-white/5 focus-within:border-blue-500/50 transition-colors">
+                  <input
+                    type="text"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Type a message..."
+                    className="bg-transparent border-none outline-none text-white text-sm flex-1 ml-2 placeholder-zinc-500"
+                  />
+                  <IconButton
+                    onClick={sendMessage}
+                    disabled={!message.trim()}
+                    size="small"
+                    className={`!transition-all ${message.trim() ? '!text-blue-500 hover:!bg-blue-500/10' : '!text-zinc-600'}`}
+                  >
+                    <ChatIcon fontSize="small" className="rotate-[-90deg]" /> {/* Send icon hack using ChatIcon rotated or use SendIcon if available */}
                   </IconButton>
                 </div>
               </div>

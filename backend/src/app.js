@@ -64,8 +64,12 @@ io.on('connection', (socket) => {
       // Emit room-joined to self (as Host)
       socket.emit("room-joined", { isHost: true, username: userMap[socket.id] });
 
-      // Also emit user-joined (to self mainly to init list, though empty)
-      io.to(socket.id).emit("user-joined", socket.id, [], userMap[socket.id]);
+      // Also emit user-joined with self in the clients list
+      const currentUsers = [{
+        socketId: socket.id,
+        username: userMap[socket.id]
+      }];
+      io.to(socket.id).emit("user-joined", socket.id, currentUsers, userMap[socket.id]);
 
     } else {
       // Room exists -> Join Waiting Room
@@ -107,8 +111,8 @@ io.on('connection', (socket) => {
       // Notify accepted user about existing users
       io.to(socketId).emit("user-joined", socketId, existingUsers, userMap[socketId]);
 
-      // Notify others (AND the host) about new user
-      io.to(path).emit("user-joined", socketId, [], userMap[socketId]);
+      // Notify others (AND the host) about new user with full user list
+      socket.to(path).emit("user-joined", socketId, existingUsers, userMap[socketId]);
 
       // If screen share active, tell new user
       if (activeScreenSharerId) {
@@ -148,19 +152,17 @@ io.on('connection', (socket) => {
     io.to(toId).emit("signal", socket.id, message);
   });
 
-  socket.on("chat-message", (data, sender) => {
-    const match = data.match(/^@(\S+)\s+(.+)$/);
-    if (match) {
-      const targetUsername = match[1];
-      const msg = match[2];
-      const targetSocketId = Object.keys(io.sockets.sockets).find(
-        id => io.sockets.sockets[id].username === targetUsername
-      );
-      if (targetSocketId) {
-        io.to(targetSocketId).emit("chat-message", msg, sender);
-      }
-    } else {
-      socket.broadcast.emit("chat-message", data, sender);
+  socket.on("chat-message", (message) => {
+    // Find the room (excluding socket.id)
+    const rooms = [...socket.rooms];
+    const room = rooms.find(r => r !== socket.id);
+    const sender = userMap[socket.id] || "Guest";
+
+    if (room) {
+      // Broadcast to everyone in the room INCLUDING sender (so they know it was received)
+      // Or we can use socket.to(room) and let sender append locally.
+      // Let's use io.to(room) for simplicity and consistent ordering.
+      io.to(room).emit("chat-message", { sender, message, timestamp: new Date().toISOString() });
     }
   });
 

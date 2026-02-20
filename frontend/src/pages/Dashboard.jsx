@@ -22,7 +22,7 @@ export default function Dashboard() {
     };
 
     return (
-        <div className='h-screen w-full bg-zinc-950 font-sans text-gray-100 flex flex-col overflow-hidden selection:bg-orange-500 selection:text-white'>
+        <div className='min-h-screen w-full bg-zinc-950 font-sans text-gray-100 flex flex-col overflow-x-hidden selection:bg-orange-500 selection:text-white'>
 
             {/* BACKGROUND TEXTURE */}
             <div className="absolute inset-0 max-w-full z-0 pointer-events-none">
@@ -61,7 +61,7 @@ export default function Dashboard() {
             </nav>
 
             {/* MAIN CONTENT */}
-            <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-6 md:px-12 py-8 flex flex-col items-center justify-center">
+            <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-6 md:px-12 py-8 flex flex-col items-center md:justify-center overflow-y-auto">
 
                 <div className="w-full max-w-4xl flex flex-col items-center text-center space-y-4 mb-8">
                     <h1 className='text-3xl md:text-4xl font-extrabold tracking-tight leading-tight animate-slide-up'>

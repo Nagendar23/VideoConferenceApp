@@ -444,18 +444,18 @@ const VideoMeet = () => {
   const toggleVideo = async () => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    
+
     const currentVideoTrack = stream.getVideoTracks()[0];
     if (!currentVideoTrack) return;
-    
+
     if (videoAvailable) {
       // Turn OFF: Stop the camera and replace with black track
       stream.getVideoTracks().forEach(track => track.stop());
-      
+
       const blackTrack = black();
       stream.removeTrack(currentVideoTrack);
       stream.addTrack(blackTrack);
-      
+
       // Update all peer connections
       Object.values(connections).forEach((pc) => {
         const senders = pc.getSenders();
@@ -464,7 +464,7 @@ const VideoMeet = () => {
           videoSender.replaceTrack(blackTrack);
         }
       });
-      
+
       setVideoAvailable(false);
       if (!askForUsername) {
         socket.emit("video-toggle", false);
@@ -474,11 +474,11 @@ const VideoMeet = () => {
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
         const newVideoTrack = newStream.getVideoTracks()[0];
-        
+
         stream.removeTrack(currentVideoTrack);
         currentVideoTrack.stop();
         stream.addTrack(newVideoTrack);
-        
+
         // Update all peer connections
         Object.values(connections).forEach((pc) => {
           const senders = pc.getSenders();
@@ -487,7 +487,7 @@ const VideoMeet = () => {
             videoSender.replaceTrack(newVideoTrack);
           }
         });
-        
+
         setVideoAvailable(true);
         if (!askForUsername) {
           socket.emit("video-toggle", true);
@@ -502,18 +502,18 @@ const VideoMeet = () => {
   const toggleAudio = async () => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    
+
     const currentAudioTrack = stream.getAudioTracks()[0];
     if (!currentAudioTrack) return;
-    
+
     if (audioAvailable) {
       // Turn OFF: Stop the microphone and replace with silent track
       stream.getAudioTracks().forEach(track => track.stop());
-      
+
       const silentTrack = silence();
       stream.removeTrack(currentAudioTrack);
       stream.addTrack(silentTrack);
-      
+
       // Update all peer connections
       Object.values(connections).forEach((pc) => {
         const senders = pc.getSenders();
@@ -522,18 +522,18 @@ const VideoMeet = () => {
           audioSender.replaceTrack(silentTrack);
         }
       });
-      
+
       setAudioAvailable(false);
     } else {
       // Turn ON: Get real microphone and replace silent track
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const newAudioTrack = newStream.getAudioTracks()[0];
-        
+
         stream.removeTrack(currentAudioTrack);
         currentAudioTrack.stop();
         stream.addTrack(newAudioTrack);
-        
+
         // Update all peer connections
         Object.values(connections).forEach((pc) => {
           const senders = pc.getSenders();
@@ -542,7 +542,7 @@ const VideoMeet = () => {
             audioSender.replaceTrack(newAudioTrack);
           }
         });
-        
+
         setAudioAvailable(true);
       } catch (err) {
         console.error("Failed to turn on microphone:", err);
@@ -552,16 +552,11 @@ const VideoMeet = () => {
   };
 
   const startScreenShare = async () => {
-    // 1. Request confirmation or check availability via socket first?
-    // In this plan, we request server, server broadcasts 'screen-share-started'.
-    // If we want to be strict, we 'ask' server, server says OK, then we getMedia.
-    // Or we just try to getMedia, then tell server. If server says "NO", we stop.
-    // The plan said: Emit request-screen-share. Wait for ACK or listen to 'screen-share-started'.
-
-    // Let's optimistic: Ask for media first (user interaction required physically first often), 
-    // OR Ask server lock first. 
-    // Browser blocking popup usually needs user gesture. Click -> GetMedia is best.
-    // Click -> Socket(Ask) -> Socket(OK) -> GetMedia works but latency might be weird or browser might block 'async' getDisplayMedia.
+    // Check if screen share is supported (not on most mobile browsers)
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setNotification({ open: true, message: "Screen sharing is not supported on this device/browser.", type: "warning" });
+      return;
+    }
 
     try {
       // Check if someone else is sharing based on local state first to save a trip
@@ -580,10 +575,6 @@ const VideoMeet = () => {
       // Now tell server we want to share
       socket.emit("request-screen-share");
 
-      // We will receive "screen-share-started" with our ID from server if success.
-      // But we can start showing it locally or preparing. 
-      // Actually we need to replace tracks in PeerConnections.
-
       setIsScreenSharing(true);
 
       // Replace track in all connections
@@ -595,14 +586,13 @@ const VideoMeet = () => {
         }
       });
 
-      // Update local preview if we want (optional, usually users want to see what they share or just see others)
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = screenStream;
       }
-      localStreamRef.current = screenStream; // Keep track for new connections
-      setVideoAvailable(true); // Screen share implies video is on
+      localStreamRef.current = screenStream;
+      setVideoAvailable(true);
       if (localVideoRef.current) {
-        localVideoRef.current.classList.remove("scale-x-[-1]"); // Remove mirror effect for screen share
+        localVideoRef.current.classList.remove("scale-x-[-1]");
       }
 
     } catch (err) {
@@ -817,12 +807,12 @@ const VideoMeet = () => {
             </div>
           )}
 
-          {/* Controls Bar */}
-          {/* Controls Bar */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 px-6 py-3 bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl z-50 transition-all hover:border-white/20 hover:shadow-sky-500/10">
+          {/* Controls Bar - horizontally scrollable on very small screens */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl z-50 transition-all hover:border-white/20 hover:shadow-sky-500/10 max-w-[calc(100vw-2rem)] overflow-x-auto scrollbar-hide">
 
-            {/* Info */}
-            <div className="hidden md:block">
+
+            {/* Info button - visible on all screen sizes */}
+            <div>
               <IconButton
                 onClick={() => setShowInfo(true)}
                 className="group !bg-zinc-800/50 hover:!bg-zinc-700 !border !border-white/5 !text-gray-400 hover:!text-white !transition-all !duration-200"
@@ -832,7 +822,7 @@ const VideoMeet = () => {
               </IconButton>
             </div>
 
-            <div className="h-8 w-px bg-white/10 hidden md:block mx-1" />
+            <div className="h-8 w-px bg-white/10 mx-1" />
 
             {/* Video Toggle */}
             <IconButton
@@ -918,7 +908,7 @@ const VideoMeet = () => {
               <div className="flex justify-between items-center text-white">
                 <h3 className="text-xl font-semibold">Meeting Info</h3>
                 <IconButton onClick={() => setShowInfo(false)} size="small" className="!text-white hover:!bg-red-600">
-                  <CloseIcon/>
+                  <CloseIcon />
                 </IconButton>
               </div>
 
@@ -1008,8 +998,8 @@ const VideoMeet = () => {
             </div>
           )}
 
-          {/* Local Video - Floating */}
-          <div className={`absolute bottom-5 right-5 w-[250px] h-[150px] rounded-xl border-2 border-white/20 shadow-2xl overflow-hidden z-30 transition-all duration-300 bg-black hover:scale-105`}>
+          {/* Local Video - Floating: top-right on mobile, bottom-right on desktop */}
+          <div className={`absolute top-4 right-4 md:top-auto md:bottom-5 md:right-5 w-[110px] h-[72px] md:w-[250px] md:h-[150px] rounded-xl border-2 border-white/20 shadow-2xl overflow-hidden z-30 transition-all duration-300 bg-black hover:scale-105`}>
             {videoAvailable ? (
               <video
                 className="w-full h-full object-cover"
@@ -1032,14 +1022,12 @@ const VideoMeet = () => {
 
           <div className="flex w-full h-full">
             {screenSharerId ? (
-              // HERO LAYOUT
-              <div className="w-full h-full flex p-5 gap-5">
+              // HERO LAYOUT - responsive for mobile
+              <div className="w-full h-full flex flex-col md:flex-row p-3 md:p-5 gap-3 md:gap-5">
 
                 {/* Main Hero Area (Shared Screen) */}
-                <div className="flex-1 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl relative">
+                <div className="flex-1 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl relative min-h-0">
                   {(() => {
-                    // Find the stream for screenSharerId
-                    // If it's me:
                     if (screenSharerId === socketIdRef.current) {
                       return (
                         <video
@@ -1051,7 +1039,6 @@ const VideoMeet = () => {
                         />
                       )
                     }
-                    // If remote
                     const remoteVideo = videos.find(v => v.socketId === screenSharerId);
                     if (remoteVideo) {
                       return (
@@ -1071,9 +1058,8 @@ const VideoMeet = () => {
                   </div>
                 </div>
 
-                {/* Sidebar for other participants */}
-                <div className="w-[300px] flex flex-col gap-4 overflow-y-auto">
-                  {/* Show Local User if not sharing (or if sharing, maybe small preview?) -> Usually we see ourselves small */}
+                {/* Sidebar for other participants - hidden on mobile */}
+                <div className="hidden md:flex w-[300px] flex-col gap-4 overflow-y-auto">
                   {screenSharerId !== socketIdRef.current && (
                     <div className="relative aspect-video bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 shadow-md">
                       <video
@@ -1085,7 +1071,6 @@ const VideoMeet = () => {
                     </div>
                   )}
 
-                  {/* Other remote users who are NOT the sharer */}
                   {videos.filter(v => v.socketId !== screenSharerId).map((video) => (
                     <div key={video.socketId} className="relative aspect-video bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 shadow-md">
                       {!video.videoEnabled && (

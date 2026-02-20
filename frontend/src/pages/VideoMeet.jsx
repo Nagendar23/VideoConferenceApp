@@ -807,12 +807,14 @@ const VideoMeet = () => {
             </div>
           )}
 
-          {/* Controls Bar - horizontally scrollable on very small screens */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl z-50 transition-all hover:border-white/20 hover:shadow-sky-500/10 max-w-[calc(100vw-2rem)] overflow-x-auto scrollbar-hide">
+          {/* Controls Bar */}
+          {/* Outer wrapper: always-visible End Call + scrollable inner buttons */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center bg-zinc-950/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl z-50 transition-all hover:border-white/20 hover:shadow-sky-500/10 max-w-[calc(100vw-2rem)]">
 
+            {/* Scrollable secondary controls */}
+            <div className="flex items-center gap-2 md:gap-3 px-3 md:px-5 py-3 overflow-x-auto scrollbar-hide">
 
-            {/* Info button - visible on all screen sizes */}
-            <div>
+              {/* Info */}
               <IconButton
                 onClick={() => setShowInfo(true)}
                 className="group !bg-zinc-800/50 hover:!bg-zinc-700 !border !border-white/5 !text-gray-400 hover:!text-white !transition-all !duration-200"
@@ -820,86 +822,86 @@ const VideoMeet = () => {
               >
                 <InfoIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
               </IconButton>
+
+              <div className="h-8 w-px bg-white/10 flex-shrink-0" />
+
+              {/* Video Toggle */}
+              <IconButton
+                onClick={toggleVideo}
+                className={`group !transition-all !duration-200 !border ${videoAvailable
+                  ? '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'
+                  : '!bg-red-500/90 hover:!bg-red-600 !border-red-500 !text-white !shadow-lg !shadow-red-500/20'}`}
+                size="large"
+              >
+                {videoAvailable
+                  ? <VideocamIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                  : <VideocamOffIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                }
+              </IconButton>
+
+              {/* Audio Toggle */}
+              <IconButton
+                onClick={toggleAudio}
+                className={`group !transition-all !duration-200 !border ${audioAvailable
+                  ? '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'
+                  : '!bg-red-500/90 hover:!bg-red-600 !border-red-500 !text-white !shadow-lg !shadow-red-500/20'}`}
+                size="large"
+              >
+                {audioAvailable
+                  ? <MicIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                  : <MicOffIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                }
+              </IconButton>
+
+              {/* Screen Share */}
+              {!isScreenSharing ? (
+                <IconButton
+                  onClick={startScreenShare}
+                  disabled={!!screenSharerId}
+                  className={`group !transition-all !duration-200 !border ${!!screenSharerId
+                    ? "!opacity-30 !cursor-not-allowed"
+                    : "!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-sky-400 hover:!text-sky-300"}`}
+                  size="large"
+                >
+                  <ScreenShareIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  onClick={stopScreenShare}
+                  className="group !bg-orange-500/90 hover:!bg-orange-600 !text-white !shadow-lg !shadow-orange-500/20 !border !border-orange-500 !transition-all !duration-200"
+                  size="large"
+                >
+                  <StopScreenShareIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                </IconButton>
+              )}
+
+              {/* Chat */}
+              <Badge badgeContent={newMessages} color="error" overlap="circular" max={99}>
+                <IconButton
+                  onClick={() => {
+                    setShowChat(!showChat);
+                    setNewMessages(0);
+                  }}
+                  className={`group !transition-all !duration-200 !border ${showChat
+                    ? '!bg-blue-600 hover:!bg-blue-700 !border-blue-500 !text-white !shadow-lg !shadow-blue-600/20'
+                    : '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'}`}
+                  size="large"
+                >
+                  <ChatIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                </IconButton>
+              </Badge>
             </div>
 
-            <div className="h-8 w-px bg-white/10 mx-1" />
-
-            {/* Video Toggle */}
-            <IconButton
-              onClick={toggleVideo}
-              className={`group !transition-all !duration-200 !border ${videoAvailable
-                ? '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'
-                : '!bg-red-500/90 hover:!bg-red-600 !border-red-500 !text-white !shadow-lg !shadow-red-500/20'}`}
-              size="large"
-            >
-              {videoAvailable
-                ? <VideocamIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-                : <VideocamOffIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-              }
-            </IconButton>
-
-            {/* Audio Toggle */}
-            <IconButton
-              onClick={toggleAudio}
-              className={`group !transition-all !duration-200 !border ${audioAvailable
-                ? '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'
-                : '!bg-red-500/90 hover:!bg-red-600 !border-red-500 !text-white !shadow-lg !shadow-red-500/20'}`}
-              size="large"
-            >
-              {audioAvailable
-                ? <MicIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-                : <MicOffIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-              }
-            </IconButton>
-
-            {/* Screen Share */}
-            {!isScreenSharing ? (
+            {/* Permanent End Call — always visible, outside scroll area */}
+            <div className="flex items-center pr-3 pl-1 py-3 flex-shrink-0 border-l border-white/10">
               <IconButton
-                onClick={startScreenShare}
-                disabled={!!screenSharerId}
-                className={`group !transition-all !duration-200 !border ${!!screenSharerId
-                  ? "!opacity-30 !cursor-not-allowed"
-                  : "!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-sky-400 hover:!text-sky-300"}`}
+                onClick={handleEndCall}
+                className="group !bg-red-600 hover:!bg-red-700 !text-white !shadow-lg !shadow-red-600/30 !border !border-red-500 !transition-all !duration-200 hover:!scale-105"
                 size="large"
               >
-                <ScreenShareIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
+                <CallEndIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
               </IconButton>
-            ) : (
-              <IconButton
-                onClick={stopScreenShare}
-                className="group !bg-orange-500/90 hover:!bg-orange-600 !text-white !shadow-lg !shadow-orange-500/20 !border !border-orange-500 !transition-all !duration-200"
-                size="large"
-              >
-                <StopScreenShareIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-              </IconButton>
-            )}
-
-            {/* Chat */}
-            <Badge badgeContent={newMessages} color="error" overlap="circular" max={99}>
-              <IconButton
-                onClick={() => {
-                  setShowChat(!showChat);
-                  setNewMessages(0);
-                }}
-                className={`group !transition-all !duration-200 !border ${showChat
-                  ? '!bg-blue-600 hover:!bg-blue-700 !border-blue-500 !text-white !shadow-lg !shadow-blue-600/20'
-                  : '!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-white'}`}
-                size="large"
-              >
-                <ChatIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-              </IconButton>
-            </Badge>
-
-            <div className="h-8 w-px bg-white/10 mx-1" />
-
-            {/* End Call */}
-            <IconButton
-              onClick={handleEndCall}
-              className="group !bg-red-600 hover:!bg-red-700 !text-white !shadow-lg !shadow-red-600/30 !border !border-red-500 !transition-all !duration-200 hover:!scale-105"
-              size="large"
-            >
-              <CallEndIcon fontSize="inherit" className="group-hover:scale-110 transition-transform" />
-            </IconButton>
+            </div>
           </div>
 
           {/* Meeting Info Popup */}

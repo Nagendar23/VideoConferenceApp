@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useContext } from "react";
+import React, { useEffect, useRef, useState, useContext, useCallback } from "react";
 import Avatar from '@mui/material/Avatar';
-import { deepOrange, deepPurple } from '@mui/material/colors';
+import { deepOrange } from '@mui/material/colors';
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -49,6 +49,79 @@ const stringToColor = (string) => {
 
   return color;
 };
+
+// Memoized Video Component to prevent re-renders when typing
+const VideoElement = React.memo(({ stream, videoEnabled, username, socketId, className, muted = false, isLocal = false }) => {
+  const videoRef = useRef();
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      try {
+        videoRef.current.srcObject = stream;
+      } catch (error) {
+        console.error('Error setting video stream:', error);
+      }
+    }
+  }, [stream]);
+
+  if (!videoEnabled && !isLocal) {
+    return (
+      <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-900">
+        <Avatar sx={{ bgcolor: stringToColor(username || "Remote"), width: 80, height: 80, fontSize: '2rem' }}>
+          {username ? username.substring(0, 2).toUpperCase() : "U"}
+        </Avatar>
+      </div>
+    );
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      data-socket={socketId}
+      autoPlay
+      muted={muted}
+      playsInline
+      className={className}
+    />
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  return prevProps.stream === nextProps.stream &&
+    prevProps.videoEnabled === nextProps.videoEnabled &&
+    prevProps.username === nextProps.username &&
+    prevProps.socketId === nextProps.socketId;
+});
+
+// Memoized Chat Message Component to prevent re-renders when typing
+const ChatMessage = React.memo(({ msg, isMe, showSender }) => {
+  return (
+    <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+      {showSender && (
+        <span className="text-[11px] text-zinc-400 mb-1 px-8 font-medium">{msg.sender}</span>
+      )}
+      <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+        {!isMe && (
+          <Avatar sx={{ width: 26, height: 26, fontSize: '0.7rem', bgcolor: stringToColor(msg.sender), flexShrink: 0 }}>
+            {msg.sender[0]?.toUpperCase()}
+          </Avatar>
+        )}
+        <div className={`px-3 py-2 rounded-2xl text-sm break-words leading-relaxed ${isMe
+            ? 'bg-blue-600 text-white rounded-tr-none'
+            : 'bg-zinc-800 text-gray-200 rounded-tl-none'
+          }`}>
+          {msg.message}
+        </div>
+      </div>
+      <span className={`text-[10px] text-zinc-600 mt-0.5 ${isMe ? 'pr-1' : 'pl-9'}`}>
+        {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+      </span>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.msg === nextProps.msg &&
+    prevProps.isMe === nextProps.isMe &&
+    prevProps.showSender === nextProps.showSender;
+});
 
 const VideoMeet = () => {
   const { userData } = useContext(AuthContext); // Access logged in user
@@ -366,14 +439,18 @@ const VideoMeet = () => {
     if (!socket) return;
 
     socket.on("video-toggle", (socketId, isAvailable) => {
-      setVideos((prev) => {
-        return prev.map((v) => {
-          if (v.socketId === socketId) {
-            return { ...v, videoEnabled: isAvailable };
-          }
-          return v;
+      try {
+        setVideos((prev) => {
+          return prev.map((v) => {
+            if (v.socketId === socketId) {
+              return { ...v, videoEnabled: isAvailable };
+            }
+            return v;
+          })
         })
-      })
+      } catch (error) {
+        console.error("Error handling video toggle:", error);
+      }
     });
 
 
@@ -393,9 +470,14 @@ const VideoMeet = () => {
 
     socket.on("chat-message", (data) => {
       // data: { sender, message, timestamp }
-      setMessages((prev) => [...prev, data]);
-      if (!showChatRef.current) {
-        setNewMessages((prev) => prev + 1);
+      try {
+        setMessages((prev) => [...prev, data]);
+        if (!showChatRef.current) {
+          setNewMessages((prev) => prev + 1);
+        }
+      } catch (error) {
+        console.error("Error handling chat message:", error);
+        setNotification({ open: true, message: "Error receiving message", type: "error" });
       }
     });
 
@@ -636,12 +718,17 @@ const VideoMeet = () => {
     }
   };
 
-  const sendMessage = () => {
+  const sendMessage = useCallback(() => {
     if (message.trim() && socket) {
-      socket.emit("chat-message", message.trim());
-      setMessage("");
+      try {
+        socket.emit("chat-message", message.trim());
+        setMessage("");
+      } catch (error) {
+        console.error("Error sending message:", error);
+        setNotification({ open: true, message: "Failed to send message", type: "error" });
+      }
     }
-  };
+  }, [message, socket]);
 
   // Keep showChatRef in sync with showChat state
   useEffect(() => {
@@ -654,6 +741,26 @@ const VideoMeet = () => {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Memoize message input handler to prevent re-renders
+  const handleMessageChange = useCallback((e) => {
+    try {
+      setMessage(e.target.value.slice(0, 500));
+    } catch (error) {
+      console.error("Error updating message:", error);
+    }
+  }, []);
+
+  const handleKeyDown = useCallback((e) => {
+    try {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    } catch (error) {
+      console.error("Error handling key down:", error);
+    }
+  }, [sendMessage]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -872,8 +979,8 @@ const VideoMeet = () => {
               {!isScreenSharing ? (
                 <IconButton
                   onClick={startScreenShare}
-                  disabled={!!screenSharerId}
-                  className={`group !transition-all !duration-200 !border ${!!screenSharerId
+                  disabled={screenSharerId !== null}
+                  className={`group !transition-all !duration-200 !border ${screenSharerId !== null
                     ? "!opacity-30 !cursor-not-allowed"
                     : "!bg-zinc-800/50 hover:!bg-zinc-700 !border-white/5 !text-sky-400 hover:!text-sky-300"}`}
                   size="large"
@@ -970,27 +1077,12 @@ const VideoMeet = () => {
                     const isMe = msg.sender === username;
                     const showSender = !isMe && (i === 0 || messages[i - 1]?.sender !== msg.sender);
                     return (
-                      <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                        {showSender && (
-                          <span className="text-[11px] text-zinc-400 mb-1 px-8 font-medium">{msg.sender}</span>
-                        )}
-                        <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                          {!isMe && (
-                            <Avatar sx={{ width: 26, height: 26, fontSize: '0.7rem', bgcolor: stringToColor(msg.sender), flexShrink: 0 }}>
-                              {msg.sender[0]?.toUpperCase()}
-                            </Avatar>
-                          )}
-                          <div className={`px-3 py-2 rounded-2xl text-sm break-words leading-relaxed ${isMe
-                              ? 'bg-blue-600 text-white rounded-tr-none'
-                              : 'bg-zinc-800 text-gray-200 rounded-tl-none'
-                            }`}>
-                            {msg.message}
-                          </div>
-                        </div>
-                        <span className={`text-[10px] text-zinc-600 mt-0.5 ${isMe ? 'pr-1' : 'pl-9'}`}>
-                          {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </span>
-                      </div>
+                      <ChatMessage
+                        key={`${msg.timestamp}-${i}`}
+                        msg={msg}
+                        isMe={isMe}
+                        showSender={showSender}
+                      />
                     );
                   })
                 )}
@@ -1003,13 +1095,8 @@ const VideoMeet = () => {
                   <input
                     type="text"
                     value={message}
-                    onChange={(e) => setMessage(e.target.value.slice(0, 500))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendMessage();
-                      }
-                    }}
+                    onChange={handleMessageChange}
+                    onKeyDown={handleKeyDown}
                     placeholder="Type a message... (Enter to send)"
                     className="bg-transparent border-none outline-none text-white text-sm flex-1 ml-2 placeholder-zinc-500"
                     maxLength={500}
@@ -1033,15 +1120,14 @@ const VideoMeet = () => {
           {/* Local Video - Floating: top-right on mobile, bottom-right on desktop */}
           <div className={`absolute top-4 right-4 md:top-auto md:bottom-5 md:right-5 w-[110px] h-[72px] md:w-[250px] md:h-[150px] rounded-xl border-2 border-white/20 shadow-2xl overflow-hidden z-30 transition-all duration-300 bg-black hover:scale-105`}>
             {videoAvailable ? (
-              <video
+              <VideoElement
+                stream={localStreamRef.current}
+                videoEnabled={videoAvailable}
+                username={username}
+                socketId="local"
+                muted={true}
+                isLocal={true}
                 className="w-full h-full object-cover"
-                ref={(v) => {
-                  if (v && localStreamRef.current)
-                    v.srcObject = localStreamRef.current;
-                }}
-                autoPlay
-                muted
-                playsInline
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-black">
@@ -1153,15 +1239,11 @@ const VideoMeet = () => {
                           </Avatar>
                         </div>
                       )}
-                      <video
-                        data-socket={video.socketId}
-                        ref={(ref) => {
-                          if (ref && video.stream) {
-                            ref.srcObject = video.stream;
-                          }
-                        }}
-                        autoPlay
-                        playsInline
+                      <VideoElement
+                        stream={video.stream}
+                        videoEnabled={video.videoEnabled}
+                        username={video.username}
+                        socketId={video.socketId}
                         className={`w-full h-full object-cover ${video.videoEnabled ? 'block' : 'hidden'}`}
                       />
 

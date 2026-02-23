@@ -11,6 +11,7 @@ import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import { Badge } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
+import SendIcon from "@mui/icons-material/Send";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle"; // For kick
@@ -65,6 +66,8 @@ const VideoMeet = () => {
   const [message, setMessage] = useState("");
   const [newMessages, setNewMessages] = useState(0);
   const [showChat, setShowChat] = useState(false);
+  const showChatRef = useRef(false);
+  const messagesEndRef = useRef(null);
   const [streamReady, setStreamReady] = useState(false);
   const [screenSharerId, setScreenSharerId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -391,7 +394,7 @@ const VideoMeet = () => {
     socket.on("chat-message", (data) => {
       // data: { sender, message, timestamp }
       setMessages((prev) => [...prev, data]);
-      if (!showChat) {
+      if (!showChatRef.current) {
         setNewMessages((prev) => prev + 1);
       }
     });
@@ -635,10 +638,22 @@ const VideoMeet = () => {
 
   const sendMessage = () => {
     if (message.trim() && socket) {
-      socket.emit("chat-message", message);
+      socket.emit("chat-message", message.trim());
       setMessage("");
     }
   };
+
+  // Keep showChatRef in sync with showChat state
+  useEffect(() => {
+    showChatRef.current = showChat;
+  }, [showChat]);
+
+  // Auto-scroll messages to bottom when new message arrives
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -879,8 +894,9 @@ const VideoMeet = () => {
               <Badge badgeContent={newMessages} color="error" overlap="circular" max={99}>
                 <IconButton
                   onClick={() => {
-                    setShowChat(!showChat);
-                    setNewMessages(0);
+                    const next = !showChat;
+                    setShowChat(next);
+                    if (next) setNewMessages(0);
                   }}
                   className={`group !transition-all !duration-200 !border ${showChat
                     ? '!bg-blue-600 hover:!bg-blue-700 !border-blue-500 !text-white !shadow-lg !shadow-blue-600/20'
@@ -947,33 +963,38 @@ const VideoMeet = () => {
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-2">
                     <ChatIcon sx={{ fontSize: 40, opacity: 0.2 }} />
-                    <p className="text-sm">No messages yet</p>
+                    <p className="text-sm">No messages yet. Say hello! 👋</p>
                   </div>
                 ) : (
                   messages.map((msg, i) => {
                     const isMe = msg.sender === username;
+                    const showSender = !isMe && (i === 0 || messages[i - 1]?.sender !== msg.sender);
                     return (
                       <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        {showSender && (
+                          <span className="text-[11px] text-zinc-400 mb-1 px-8 font-medium">{msg.sender}</span>
+                        )}
                         <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                           {!isMe && (
-                            <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem', bgcolor: stringToColor(msg.sender) }}>
-                              {msg.sender[0]}
+                            <Avatar sx={{ width: 26, height: 26, fontSize: '0.7rem', bgcolor: stringToColor(msg.sender), flexShrink: 0 }}>
+                              {msg.sender[0]?.toUpperCase()}
                             </Avatar>
                           )}
-                          <div className={`px-3 py-2 rounded-2xl text-sm break-words ${isMe
-                            ? 'bg-blue-600 text-white rounded-tr-none'
-                            : 'bg-zinc-800 text-gray-200 rounded-tl-none'
+                          <div className={`px-3 py-2 rounded-2xl text-sm break-words leading-relaxed ${isMe
+                              ? 'bg-blue-600 text-white rounded-tr-none'
+                              : 'bg-zinc-800 text-gray-200 rounded-tl-none'
                             }`}>
                             {msg.message}
                           </div>
                         </div>
-                        {/* <span className="text-[10px] text-zinc-500 mt-1 px-1">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span> */}
+                        <span className={`text-[10px] text-zinc-600 mt-0.5 ${isMe ? 'pr-1' : 'pl-9'}`}>
+                          {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
                       </div>
-                    )
+                    );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Input Area */}
@@ -982,20 +1003,29 @@ const VideoMeet = () => {
                   <input
                     type="text"
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Type a message..."
+                    onChange={(e) => setMessage(e.target.value.slice(0, 500))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Type a message... (Enter to send)"
                     className="bg-transparent border-none outline-none text-white text-sm flex-1 ml-2 placeholder-zinc-500"
+                    maxLength={500}
                   />
                   <IconButton
                     onClick={sendMessage}
                     disabled={!message.trim()}
                     size="small"
-                    className={`!transition-all ${message.trim() ? '!text-blue-500 hover:!bg-blue-500/10' : '!text-zinc-600'}`}
+                    className={`!transition-all !duration-200 ${message.trim() ? '!text-blue-400 hover:!bg-blue-500/15 hover:!scale-110' : '!text-zinc-600'}`}
                   >
-                    <ChatIcon fontSize="small" className="rotate-[-90deg]" /> {/* Send icon hack using ChatIcon rotated or use SendIcon if available */}
+                    <SendIcon fontSize="small" />
                   </IconButton>
                 </div>
+                {message.length > 400 && (
+                  <p className="text-[10px] text-zinc-500 mt-1 text-right">{message.length}/500</p>
+                )}
               </div>
             </div>
           )}
